@@ -50,7 +50,7 @@ ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png"}
 
 # Detections with confidence below this value are discarded (also enforced
 # inside ml/detector.py — both filters run to be safe)
-CONFIDENCE_THRESHOLD = 0.60
+CONFIDENCE_THRESHOLD = 0.40
 
 
 # ---------------------------------------------------------------------------

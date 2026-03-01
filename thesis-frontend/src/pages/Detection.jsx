@@ -7,10 +7,11 @@
  * Right column – Placeholder (results panel — next prompt)
  */
 
-import { useState, useRef } from 'react'
-import { Upload, AlertCircle, CheckCircle, Loader2, Circle, ScanSearch } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Upload, AlertCircle, CheckCircle, Loader2, Circle, ScanSearch, Navigation } from 'lucide-react'
 import exifr from 'exifr'
 import { detectOil } from '../api/endpoints'
+import { useNavigation } from '../hooks/useNavigation'
 
 // ── Shared card style ─────────────────────────────────────────────────────────
 const cardClass =
@@ -25,6 +26,8 @@ export default function Detection() {
   const [isDragging, setIsDragging] = useState(false)
   const [fileError, setFileError] = useState(null)
   const fileInputRef = useRef(null)
+  const canvasRef = useRef(null)
+  const imageRef = useRef(null)
 
   // ── Drone info state ─────────────────────────────────────────────────────
   const [droneLat, setDroneLat] = useState('')
@@ -41,6 +44,10 @@ export default function Detection() {
   const [isDetecting, setIsDetecting] = useState(false)
   const [detectionError, setDetectionError] = useState(null)
   const [detectionResult, setDetectionResult] = useState(null)
+  const [navigatedId, setNavigatedId] = useState(null)
+
+  // ── Destructure navigation hook
+  const { navigateToLocation } = useNavigation()
 
   // ── Image handler ─────────────────────────────────────────────────────────
   const handleImageSelect = (file) => {
@@ -211,6 +218,122 @@ export default function Detection() {
       setIsDetecting(false)
     }
   }
+  // Draw bounding boxes on canvas
+  useEffect(() => {
+    // Only draw when we have results with detections
+    if (!detectionResult) return
+    if (detectionResult.total_detections === 0) return
+    if (!canvasRef.current) return
+    if (!imageRef.current) return
+
+    const canvas = canvasRef.current
+    const img = imageRef.current
+    const ctx = canvas.getContext('2d')
+
+    const drawBoxes = () => {
+      const rect = img.getBoundingClientRect()
+
+      // Natural image dimensions
+      const naturalW = img.naturalWidth
+      const naturalH = img.naturalHeight
+
+      // Displayed container dimensions
+      const containerW = rect.width
+      const containerH = rect.height
+
+      // Calculate scale maintaining aspect ratio
+      // (same as object-contain behavior)
+      const scale = Math.min(
+        containerW / naturalW,
+        containerH / naturalH
+      )
+
+      // Actual rendered image size
+      const renderedW = naturalW * scale
+      const renderedH = naturalH * scale
+
+      // Offset from container edge to image edge
+      // (the letterbox padding)
+      const offsetX = (containerW - renderedW) / 2
+      const offsetY = (containerH - renderedH) / 2
+
+      // Set canvas to container size
+      canvas.width = containerW
+      canvas.height = containerH
+
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      // Draw each detection
+      detectionResult.detections.forEach((det) => {
+        // Scale bbox to rendered image size then offset by letterbox padding
+        const x1 = (det.bbox.x1 / naturalW) * renderedW + offsetX
+        const y1 = (det.bbox.y1 / naturalH) * renderedH + offsetY
+        const x2 = (det.bbox.x2 / naturalW) * renderedW + offsetX
+        const y2 = (det.bbox.y2 / naturalH) * renderedH + offsetY
+        const w = x2 - x1
+        const h = y2 - y1
+
+        // Draw red bounding box
+        ctx.strokeStyle = '#ef4444'
+        ctx.lineWidth = 2.5
+        ctx.strokeRect(x1, y1, w, h)
+
+        // Draw semi transparent fill
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.08)'
+        ctx.fillRect(x1, y1, w, h)
+
+        // Draw label background
+        const pct = (det.confidence * 100).toFixed(0)
+        const label = `Oil Spill ${pct}%`
+        ctx.font = 'bold 11px sans-serif'
+        const textW = ctx.measureText(label).width
+        const labelH = 18
+        const labelY = y1 > labelH ? y1 - labelH : y1
+        ctx.fillStyle = '#ef4444'
+        ctx.fillRect(x1, labelY, textW + 10, labelH)
+
+        // Draw label text
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(label, x1 + 5, labelY + 13)
+
+        // Draw yellow center dot
+        const cx = (det.center_pixel.cx / naturalW) * renderedW + offsetX
+        const cy = (det.center_pixel.cy / naturalH) * renderedH + offsetY
+        ctx.fillStyle = '#facc15'
+        ctx.beginPath()
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2)
+        ctx.fill()
+
+        // White outline on center dot
+        ctx.strokeStyle = '#ffffff'
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2)
+        ctx.stroke()
+      })
+    }
+
+    // Draw immediately if image already loaded
+    if (img.complete && img.naturalWidth !== 0) {
+      drawBoxes()
+    } else {
+      img.onload = drawBoxes
+    }
+
+    // Use ResizeObserver for reliable redraws on any size change
+    const observer = new ResizeObserver(() => {
+      if (img.complete && img.naturalWidth !== 0) {
+        drawBoxes()
+      }
+    })
+    observer.observe(img)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [detectionResult])
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="p-6 w-full h-full">
@@ -565,9 +688,162 @@ export default function Detection() {
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════
-            RIGHT COLUMN — Placeholder (results panel — next prompt)
+            RIGHT COLUMN — Detection Results
         ══════════════════════════════════════════════════════════════════ */}
-        <div className="w-full lg:w-1/2" />
+        <div className="w-full lg:w-1/2 flex flex-col gap-4">
+
+          {/* ── Card 1: Image with Bounding Boxes ──────────────────────── */}
+          <div className={cardClass}>
+
+            {/* Title row with detection count badge */}
+            <div className="flex justify-between items-center mb-3">
+              <h2 className={titleClass}>Detection Results</h2>
+              {detectionResult && (
+                detectionResult.total_detections > 0 ? (
+                  <span className="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded-full">
+                    {detectionResult.total_detections} oil spill(s) found
+                  </span>
+                ) : (
+                  <span className="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full">
+                    No oil detected
+                  </span>
+                )
+              )}
+            </div>
+
+            {/* Empty state — no detection run yet */}
+            {!detectionResult ? (
+              <div className="py-12">
+                <ScanSearch className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                <p className="text-sm text-gray-400 text-center">No detection run yet</p>
+                <p className="text-xs text-gray-500 text-center mt-1">
+                  Upload an image and click Detect Oil Spill
+                </p>
+              </div>
+            ) : (
+              /* Image with canvas overlay for bounding boxes */
+              <div className="relative w-full">
+                <img
+                  ref={imageRef}
+                  src={imagePreview}
+                  className="w-full rounded-lg block"
+                  style={{ maxHeight: '320px', objectFit: 'contain' }}
+                  alt="Detection result"
+                />
+                {/* Canvas overlay — only rendered when there are detections */}
+                {detectionResult?.total_detections > 0 && (
+                  <canvas
+                    ref={canvasRef}
+                    className="absolute top-0 left-0 pointer-events-none rounded-lg"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                )}
+                {/* Analysing overlay — shown while the API call is in flight */}
+                {isDetecting && (
+                  <div className="absolute inset-0 bg-gray-900/70 rounded-lg flex flex-col items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+                    <span className="text-sm text-white mt-2">Analyzing image...</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Card 2: Detection Details list ─────────────────────────── */}
+          {/* Only rendered when there is at least one detection */}
+          {detectionResult !== null && detectionResult.total_detections > 0 && (
+            <div className={cardClass}>
+              <h2 className={`${titleClass} mb-3`}>Detected Oil Spills</h2>
+
+              {/* One row per detection */}
+              {detectionResult.detections.map((det, index) => (
+                <div
+                  key={det.detection_id}
+                  className="py-3 border-b border-gray-700/50 last:border-0"
+                >
+                  <div className="flex justify-between items-start gap-3">
+
+                    {/* ── Left side: details ─────────────────────────── */}
+                    <div>
+                      {/* Header: dot + name + confidence badge */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          Detection {index + 1}
+                        </span>
+                        <span className="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded-full">
+                          {(det.confidence * 100).toFixed(0)}%
+                        </span>
+                      </div>
+
+                      {/* GPS coordinates */}
+                      {det.estimated_gps.lat !== 0 ? (
+                        <p className="text-xs text-gray-400">
+                          GPS: {det.estimated_gps.lat.toFixed(4)}, {det.estimated_gps.lng.toFixed(4)}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-yellow-400">
+                          GPS: Requires drone coordinates
+                        </p>
+                      )}
+
+                      {/* Area estimate */}
+                      {det.area_sqm > 0 && (
+                        <p className="text-xs text-gray-500">
+                          Area: {det.area_sqm.toFixed(1)} m²
+                        </p>
+                      )}
+                    </div>
+
+                    {/* ── Right side: navigate button ─────────────────── */}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {det.estimated_gps.lat !== 0 ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              navigateToLocation(
+                                det.estimated_gps.lat,
+                                det.estimated_gps.lng,
+                                'detection',
+                                det.detection_id
+                              )
+                              setNavigatedId(det.detection_id)
+                              setTimeout(() => setNavigatedId(null), 1000)
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                          >
+                            <Navigation className="w-3 h-3" />
+                            Navigate
+                          </button>
+                          {/* 1-second success flash after clicking Navigate */}
+                          {navigatedId === det.detection_id && (
+                            <span className="text-xs text-green-400">Navigating!</span>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-xs text-gray-500 text-right">
+                          Enter drone GPS for navigation
+                        </p>
+                      )}
+                    </div>
+
+                  </div>
+                </div>
+              ))}
+
+              {/* Summary footer: image dimensions + timestamp */}
+              <div className="border-t border-gray-700/50 pt-3 mt-2 flex justify-between text-xs text-gray-400">
+                <span>
+                  Image: {detectionResult.image_width}x{detectionResult.image_height}px
+                </span>
+                <span>
+                  Analyzed: {new Date(detectionResult.timestamp).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          )}
+
+        </div>
 
       </div>
     </div>
