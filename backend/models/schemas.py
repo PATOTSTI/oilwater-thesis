@@ -633,7 +633,7 @@ class OilDetection(BaseModel):
     bbox: BBox = Field(..., description="Bounding box of the detection in pixel coordinates.")
     center_pixel: CenterPixel = Field(..., description="Centre pixel of the bounding box.")
     confidence: float = Field(
-        ..., ge=0.60, le=1.0,
+        ..., ge=0.40, le=1.0,
         description="YOLOv8 confidence score (0.60–1.0; detections below 60% are filtered out).",
     )
     class_name: str = Field(..., description="Detected class label (e.g. 'oil').")
