@@ -8,7 +8,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { Upload, AlertCircle, CheckCircle, Loader2, Circle, ScanSearch, Navigation } from 'lucide-react'
+import { Upload, AlertCircle, CheckCircle, Loader2, Circle, ScanSearch, Navigation, MapPin } from 'lucide-react'
 import exifr from 'exifr'
 import { detectOil } from '../api/endpoints'
 import { useNavigation } from '../hooks/useNavigation'
@@ -749,7 +749,7 @@ export default function Detection() {
             )}
           </div>
 
-          {/* ── Card 2: Detection Details list ─────────────────────────── */}
+          {/* Detection details list card */}
           {/* Only rendered when there is at least one detection */}
           {detectionResult !== null && detectionResult.total_detections > 0 && (
             <div className={cardClass}>
@@ -765,40 +765,59 @@ export default function Detection() {
 
                     {/* ── Left side: details ─────────────────────────── */}
                     <div>
-                      {/* Header: dot + name + confidence badge */}
+                      {/* Header row: dot + label + confidence badge */}
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                        <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
                         <span className="text-sm font-medium text-gray-900 dark:text-white">
                           Detection {index + 1}
                         </span>
-                        <span className="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded-full">
+                        <span className="bg-red-500/20 text-red-400 text-xs font-bold px-2 py-0.5 rounded-full">
                           {(det.confidence * 100).toFixed(0)}%
                         </span>
                       </div>
 
-                      {/* GPS coordinates */}
-                      {det.estimated_gps.lat !== 0 ? (
-                        <p className="text-xs text-gray-400">
-                          GPS: {det.estimated_gps.lat.toFixed(4)}, {det.estimated_gps.lng.toFixed(4)}
-                        </p>
+                      {/* GPS row */}
+                      {det.estimated_gps.lat !== 0 && det.estimated_gps.lng !== 0 ? (
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-gray-400" />
+                          <span className="text-xs text-gray-400">
+                            GPS: {det.estimated_gps.lat.toFixed(4)}, {det.estimated_gps.lng.toFixed(4)}
+                          </span>
+                        </div>
                       ) : (
-                        <p className="text-xs text-yellow-400">
-                          GPS: Requires drone coordinates
-                        </p>
+                        <div className="flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-yellow-400" />
+                          <span className="text-xs text-yellow-400">GPS requires drone coordinates</span>
+                        </div>
                       )}
 
-                      {/* Area estimate */}
+                      {/* Area row */}
                       {det.area_sqm > 0 && (
                         <p className="text-xs text-gray-500">
                           Area: {det.area_sqm.toFixed(1)} m²
                         </p>
                       )}
+
+                      {/* Bounding box info */}
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        BBox: {det.bbox.x1.toFixed(0)},{det.bbox.y1.toFixed(0)} → {det.bbox.x2.toFixed(0)},{det.bbox.y2.toFixed(0)}
+                      </p>
                     </div>
 
                     {/* ── Right side: navigate button ─────────────────── */}
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       {det.estimated_gps.lat !== 0 ? (
-                        <>
+                        navigatedId === det.detection_id ? (
+                          /* Success state */
+                          <button
+                            disabled
+                            className="bg-green-600 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1"
+                          >
+                            <CheckCircle className="w-3 h-3" />
+                            Navigating!
+                          </button>
+                        ) : (
+                          /* Default state */
                           <button
                             onClick={() => {
                               navigateToLocation(
@@ -808,22 +827,16 @@ export default function Detection() {
                                 det.detection_id
                               )
                               setNavigatedId(det.detection_id)
-                              setTimeout(() => setNavigatedId(null), 1000)
+                              setTimeout(() => setNavigatedId(null), 3000)
                             }}
-                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors duration-150"
                           >
                             <Navigation className="w-3 h-3" />
                             Navigate
                           </button>
-                          {/* 1-second success flash after clicking Navigate */}
-                          {navigatedId === det.detection_id && (
-                            <span className="text-xs text-green-400">Navigating!</span>
-                          )}
-                        </>
+                        )
                       ) : (
-                        <p className="text-xs text-gray-500 text-right">
-                          Enter drone GPS for navigation
-                        </p>
+                        <p className="text-xs text-gray-500 text-right">Add drone GPS for navigation</p>
                       )}
                     </div>
 
@@ -831,13 +844,26 @@ export default function Detection() {
                 </div>
               ))}
 
-              {/* Summary footer: image dimensions + timestamp */}
-              <div className="border-t border-gray-700/50 pt-3 mt-2 flex justify-between text-xs text-gray-400">
-                <span>
-                  Image: {detectionResult.image_width}x{detectionResult.image_height}px
+              {/* Summary row: image dimensions + analyzed time */}
+              <div className="border-t border-gray-700/50 pt-3 mt-1 flex justify-between items-center">
+                <span className="text-xs text-gray-400">
+                  Image: {detectionResult.image_width} × {detectionResult.image_height}px
                 </span>
-                <span>
-                  Analyzed: {new Date(detectionResult.timestamp).toLocaleString()}
+                <span className="text-xs text-gray-400">
+                  Analyzed: {new Date(detectionResult.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
+
+              {/* Drone info summary */}
+              <div className="mt-2 pt-2 border-t border-gray-700/50 flex gap-4 flex-wrap">
+                <span className="text-xs text-gray-500">
+                  Drone Alt: {detectionResult.drone_info.altitude}m
+                </span>
+                <span className="text-xs text-gray-500">
+                  Heading: {detectionResult.drone_info.heading}°
+                </span>
+                <span className="text-xs text-gray-500">
+                  Drone GPS: {detectionResult.drone_info.lat.toFixed(4)}, {detectionResult.drone_info.lng.toFixed(4)}
                 </span>
               </div>
             </div>
