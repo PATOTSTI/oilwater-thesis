@@ -1,5 +1,20 @@
-fastapi
-uvicorn[standard]
-ultralytics
-Pillow
-python-multipart
+# --- Web framework ---
+fastapi==0.134.0
+uvicorn[standard]==0.41.0
+python-multipart==0.0.22
+
+# --- Data validation ---
+pydantic==2.12.5
+
+# --- ML / Computer Vision ---
+ultralytics==8.4.18
+torch==2.10.0
+torchvision==0.25.0
+opencv-python==4.13.0.92
+
+# --- Scientific / numeric ---
+numpy==2.4.2
+scipy==1.17.1
+
+# --- Image processing ---
+Pillow==12.1.1
