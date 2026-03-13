@@ -105,6 +105,22 @@ def update_status(body: StatusUpdate):
     app_state["oil_detected"] = body.oil_detected
     app_state["pump_status"] = body.pump_status
 
+    # Log warning when oil is newly detected
+    if body.oil_detected and not app_state.get(
+        "_last_oil_detected", False
+    ):
+        log_event(
+            "warning",
+            f"Oil detected by capacitive sensor at "
+            f"lat={body.lat}, lng={body.lng}.",
+            {
+                "lat": body.lat,
+                "lng": body.lng,
+                "pump_status": body.pump_status,
+            },
+        )
+    app_state["_last_oil_detected"] = body.oil_detected
+
     # ---- Store power readings ----
     app_state["battery_level"] = body.battery_level
     app_state["battery_voltage"] = body.battery_voltage

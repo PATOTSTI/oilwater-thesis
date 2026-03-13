@@ -169,8 +169,9 @@ export const getLogs = async (params = {}) =>
  * Permanently clear all stored logs.
  * Requires the `confirm: true` body so the backend treats it as intentional.
  */
-export const clearLogs = async () =>
-  unwrap(await apiClient.delete('/logs', { data: { confirm: true } }))
+export const deleteLogs = () => apiClient.delete('/logs', { 
+    data: { confirm: true } 
+  }).then(unwrap)
 
 // ─── HEALTH ───────────────────────────────────────────────────────────────────
 
