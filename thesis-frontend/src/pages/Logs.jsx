@@ -29,7 +29,6 @@ export default function Logs() {
       const result = await getLogs()
       const logList = result?.logs ?? []
       setLogs(logList)
-      setFilteredLogs(logList)
     } catch (err) {
       console.warn('[Logs] Fetch failed:', err.message)
     } finally {
@@ -58,7 +57,7 @@ export default function Logs() {
     }
 
     if (selectedCategory !== 'all') {
-      filtered = filtered.filter((log) => log.category === selectedCategory)
+      filtered = filtered.filter((log) => log.event_type === selectedCategory)
     }
 
     if (searchQuery.trim()) {
@@ -66,7 +65,7 @@ export default function Logs() {
       filtered = filtered.filter(
         (log) =>
           log.message.toLowerCase().includes(query) ||
-          log.category.toLowerCase().includes(query)
+          log.event_type.toLowerCase().includes(query)
       )
     }
 
@@ -88,7 +87,7 @@ export default function Logs() {
   }
 
   // Derive unique categories from loaded logs
-  const categories = ['all', ...new Set(logs.map((log) => log.category))]
+  const categories = ['all', ...new Set(logs.map((log) => log.event_type))]
 
   // Helper: dot color for a log level
   const levelDotColor = (level) => {
@@ -297,9 +296,6 @@ export default function Logs() {
                       className={`text-xs font-bold px-2 py-0.5 rounded uppercase ${levelBadgeClass(log.event_type)}`}
                     >
                       {log.event_type?.toUpperCase()}
-                    </span>
-                    <span className="bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded">
-                      {log.category}
                     </span>
                   </div>
                   <p className="text-sm text-gray-200 dark:text-gray-200 text-gray-800 mt-0.5 break-words">

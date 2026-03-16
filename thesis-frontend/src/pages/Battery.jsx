@@ -309,10 +309,10 @@ export default function BatteryPage() {
               </>
             )}
 
-            {filterStatus?.last_changed && (
+            {filterStatus?.last_updated && (
               <p className="text-xs text-gray-500 mt-2">
                 Last changed:{' '}
-                {new Date(filterStatus.last_changed).toLocaleString()}
+                {new Date(filterStatus.last_updated).toLocaleString()}
               </p>
             )}
           </div>
