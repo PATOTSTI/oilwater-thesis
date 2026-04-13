@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import MapControl from './pages/MapControl'
 import ManualControl from './pages/ManualControl'
 import Detection from './pages/Detection'
+import BatchScreening from './pages/BatchScreening'
 import Cleaning from './pages/Cleaning'
 import Battery from './pages/Battery'
 import Sensors from './pages/Sensors'
@@ -36,6 +37,7 @@ function App() {
               <Route path="/map" element={<MapControl />} />
               <Route path="/control" element={<ManualControl />} />
               <Route path="/detection" element={<Detection />} />
+              <Route path="/screening" element={<BatchScreening />} />
               <Route path="/cleaning" element={<Cleaning />} />
               <Route path="/battery" element={<Battery />} />
               <Route path="/sensors" element={<Sensors />} />

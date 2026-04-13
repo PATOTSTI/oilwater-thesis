@@ -32,6 +32,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -718,6 +719,72 @@ class DetectionListResponse(BaseModel):
     returned: int = Field(..., ge=0, description="Number of detections in this page.")
     offset: int = Field(..., ge=0, description="Offset used for this page.")
     limit: int = Field(..., ge=1, description="Page size limit used for this page.")
+
+
+# ---------------------------------------------------------------------------
+# Batch screening  (POST /detect/screen-batch)
+# ---------------------------------------------------------------------------
+
+class ScreeningStatus(str, Enum):
+    """Classification result for a single screened drone image."""
+    with_oil    = "with_oil"
+    without_oil = "without_oil"
+    uncertain   = "uncertain"
+
+
+class ScreenedImage(BaseModel):
+    """Result for one image processed by POST /detect/screen-batch."""
+    filename: str = Field(
+        ...,
+        description="Original filename as uploaded by the client.",
+    )
+    status: ScreeningStatus = Field(
+        ...,
+        description=(
+            "Classification result: "
+            "'with_oil' (best confidence ≥ 0.60), "
+            "'uncertain' (0.35 ≤ best confidence < 0.60), "
+            "'without_oil' (no detection above 0.35)."
+        ),
+    )
+    best_confidence: float = Field(
+        ..., ge=0.0, le=1.0,
+        description="Highest YOLOv8 confidence score found in this image (0 if no detections).",
+    )
+    total_detections: int = Field(
+        ..., ge=0,
+        description="Number of detections that passed the minimum screening threshold (0.35).",
+    )
+    image_width: int = Field(..., ge=1, description="Width of the image in pixels.")
+    image_height: int = Field(..., ge=1, description="Height of the image in pixels.")
+
+
+class BatchScreeningResponse(BaseModel):
+    """Response for POST /detect/screen-batch."""
+    total_images: int = Field(
+        ..., ge=0,
+        description="Total number of images submitted for screening.",
+    )
+    with_oil_count: int = Field(
+        ..., ge=0,
+        description="Number of images classified as 'with_oil'.",
+    )
+    without_oil_count: int = Field(
+        ..., ge=0,
+        description="Number of images classified as 'without_oil'.",
+    )
+    uncertain_count: int = Field(
+        ..., ge=0,
+        description="Number of images classified as 'uncertain'.",
+    )
+    results: list[ScreenedImage] = Field(
+        default_factory=list,
+        description="Per-image screening results, in the same order as the uploaded files.",
+    )
+    screened_at: datetime = Field(
+        ...,
+        description="UTC datetime when the batch screening was performed.",
+    )
 
 
 # ===========================================================================
