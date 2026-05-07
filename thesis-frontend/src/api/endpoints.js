@@ -97,6 +97,51 @@ export const detectOil = async (formData) =>
   )
 
 /**
+ * Screen a batch of drone images and classify each as with_oil / uncertain / without_oil.
+ * GPS, altitude, and heading are NOT required — this is purely an image triage call.
+ *
+ * @param {File[]} files     - Array of File objects (JPEG / PNG, max 50)
+ * @param {Function} [onProgress] - Optional Axios upload progress callback
+ * @returns {Promise<{
+ *   total_images: number,
+ *   with_oil_count: number,
+ *   without_oil_count: number,
+ *   uncertain_count: number,
+ *   screened_at: string,
+ *   results: Array<{
+ *     filename: string,
+ *     status: 'with_oil' | 'without_oil' | 'uncertain',
+ *     best_confidence: number,
+ *     total_detections: number,
+ *     image_width: number,
+ *     image_height: number,
+ *   }>
+ * }>}
+ */
+export const screenBatch = async (files, onProgress) => {
+  const formData = new FormData()
+  files.forEach((file) => formData.append('files', file))
+
+  return unwrap(
+    await apiClient.post('/detect/screen-batch', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      // Override the global 10 s timeout — batch screening uploads multiple large
+      // images and then runs YOLO inference on each one sequentially, which can
+      // easily take 30–90 s for a full batch of 50 drone images.
+      timeout: 120000, // 2 minutes
+      ...(onProgress && {
+        onUploadProgress: (event) => {
+          const percent = event.total
+            ? Math.round((event.loaded * 100) / event.total)
+            : 0
+          onProgress(percent)
+        },
+      }),
+    })
+  )
+}
+
+/**
  * Retrieve past detection results.
  * @param {object} params - optional query params (e.g. { limit, offset })
  */

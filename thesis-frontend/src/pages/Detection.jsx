@@ -8,10 +8,18 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { Upload, AlertCircle, CheckCircle, Loader2, Circle, ScanSearch, Navigation, MapPin } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
+import { Upload, AlertCircle, CheckCircle, Loader2, Circle, ScanSearch, Navigation, MapPin, Images } from 'lucide-react'
 import exifr from 'exifr'
 import { detectOil } from '../api/endpoints'
 import { useNavigation } from '../hooks/useNavigation'
+
+// ── Screening status labels + colours used in the "from screening" banner ──────
+const SCREENING_STATUS_CFG = {
+  with_oil:    { label: 'With Oil',    cls: 'text-red-400'    },
+  uncertain:   { label: 'Uncertain',   cls: 'text-yellow-400' },
+  without_oil: { label: 'Without Oil', cls: 'text-green-400'  },
+}
 
 // ── Shared card style ─────────────────────────────────────────────────────────
 const cardClass =
@@ -46,8 +54,37 @@ export default function Detection() {
   const [detectionResult, setDetectionResult] = useState(null)
   const [navigatedId, setNavigatedId] = useState(null)
 
+  // ── From-screening context banner ─────────────────────────────────────
+  // Set when this page is opened via "Open in Detection" from BatchScreening.
+  // Cleared when the user resets the image manually.
+  const [fromScreening, setFromScreening] = useState(null)
+
   // ── Destructure navigation hook
   const { navigateToLocation } = useNavigation()
+
+  // ── Router location — used to read file passed from Batch Screening ───
+  const location = useLocation()
+
+  // ── Auto-load file when arriving from Batch Screening ────────────────────
+  // Runs once on mount. If location.state carries a File object placed there
+  // by BatchScreening's handleOpenInDetection(), we load it automatically and
+  // store the screening metadata for the context banner.
+  // window.history.replaceState clears the router state so a browser
+  // back-and-forward doesn't reload the file a second time.
+  useEffect(() => {
+    const state = location.state ?? {}
+    if (state.screenedFile instanceof File) {
+      handleImageSelect(state.screenedFile)
+      setFromScreening({
+        status:      state.screenedStatus,
+        confidence:  state.screenedConfidence,
+        detections:  state.screenedDetections,
+      })
+      // Wipe router state so revisiting the page doesn't re-trigger this
+      window.history.replaceState({}, '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally empty — run once on mount only
 
   // ── Image handler ─────────────────────────────────────────────────────────
   const handleImageSelect = (file) => {
@@ -99,6 +136,9 @@ export default function Detection() {
     setDetectionResult(null)
     setDetectionError(null)
     setIsDetecting(false)
+
+    // Clear screening context
+    setFromScreening(null)
   }
 
   // ── EXIF reading ─────────────────────────────────────────────────────────
@@ -425,6 +465,35 @@ export default function Detection() {
                     Change Image
                   </button>
                 </div>
+
+                {/* ── From-screening context banner ───────────────────────── */}
+                {fromScreening && (() => {
+                  const scfg = SCREENING_STATUS_CFG[fromScreening.status]
+                  return (
+                    <div className="flex items-start gap-2 mt-2 p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                      <Images className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                      <div className="text-xs text-blue-300 leading-snug">
+                        <span className="font-semibold">Opened from Batch Screening</span>
+                        {scfg && (
+                          <>
+                            {' · '}
+                            <span className={scfg.cls}>{scfg.label}</span>
+                          </>
+                        )}
+                        {fromScreening.confidence > 0 && (
+                          <span className="text-blue-400">
+                            {' · '}{(fromScreening.confidence * 100).toFixed(0)}% screening confidence
+                          </span>
+                        )}
+                        {fromScreening.detections > 0 && (
+                          <span className="text-blue-400">
+                            {' · '}{fromScreening.detections} detection{fromScreening.detections !== 1 ? 's' : ''} found
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
               </>
             )}
 
