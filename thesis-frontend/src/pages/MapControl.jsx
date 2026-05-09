@@ -19,6 +19,47 @@ function MapAutoCenter({ deviceGps, isOnline }) {
   return null
 }
 
+// ── User location: shows desktop/browser location on map ──────────────────────
+function MapUserLocation() {
+  const map = useMap()
+  const [userGps, setUserGps] = useState(null)
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      console.warn('[MapUserLocation] Geolocation not supported')
+      return
+    }
+
+    // Get user's location once (browser will ask for permission)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords
+        setUserGps({ lat: latitude, lng: longitude })
+        console.log('[MapUserLocation] User location:', { latitude, longitude })
+      },
+      (error) => {
+        console.error('[MapUserLocation] Error getting location:', error.message)
+      }
+    )
+  }, [])
+
+  // Add purple marker for user location
+  return userGps && (
+    <CircleMarker
+      center={[userGps.lat, userGps.lng]}
+      radius={8}
+      pathOptions={{
+        color: '#a855f7',
+        fillColor: '#a855f7',
+        fillOpacity: 0.8,
+        weight: 2,
+      }}
+    >
+      <Popup>Your Location</Popup>
+    </CircleMarker>
+  )
+}
+
 export default function MapControl() {
   const { deviceStatus, isDeviceOnline } = useApp()
 
@@ -150,12 +191,16 @@ export default function MapControl() {
             className="h-full w-full"
           >
             <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution="© OpenStreetMap contributors"
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              attribution="© CartoDB contributors, © OpenStreetMap contributors"
+              maxZoom={20}
             />
 
             {/* Auto-center on device coming online */}
             <MapAutoCenter deviceGps={deviceGps} isOnline={isDeviceOnline} />
+
+            {/* User location marker (purple) */}
+            <MapUserLocation />
 
             {/* ── Device position marker (blue) ─────────────────────────────── */}
             {hasCoords(deviceGps) && (
