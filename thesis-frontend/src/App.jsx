@@ -22,9 +22,9 @@ function App() {
       {/* Fixed sidebar — always 64 px wide in collapsed state */}
       <Sidebar />
 
-      {/* Content area — ml-16 (64 px) offsets the fixed sidebar so nothing
+      {/* Content area — ml-56 (224 px) offsets the fixed sidebar so nothing
           is hidden beneath it. flex-1 takes all remaining width. */}
-      <div className="ml-16 flex flex-1 flex-col overflow-hidden">
+      <div className="ml-56 flex flex-1 flex-col overflow-hidden">
         <StatusBar />
         {/* pt-14 offsets the fixed StatusBar (h-14 = 56 px). AlertBanner
             sits in normal flow directly below it, pushing main down
