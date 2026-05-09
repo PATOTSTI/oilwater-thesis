@@ -67,7 +67,7 @@ export default function StatusBar() {
       <div className="flex items-center gap-3">
         {/* Connection pill */}
         <div className={[
-          'flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium',
+          'flex items-center gap-2 rounded-full px-3 py-1 text-md font-medium',
           isDeviceOnline ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400',
         ].join(' ')}>
           <span className={[
@@ -78,7 +78,7 @@ export default function StatusBar() {
         </div>
 
         {/* Mode badge */}
-        <div className={`rounded-full px-3 py-1 text-xs font-medium ${modeColor}`}>
+        <div className={`rounded-full px-3 py-1 text-md font-medium ${modeColor}`}>
           {modeLabel}
         </div>
       </div>
@@ -86,7 +86,7 @@ export default function StatusBar() {
       {/* ── Right — battery indicator + emergency stop ─────────────────── */}
       <div className="flex items-center gap-3">
         {/* Battery */}
-        <div className={`flex items-center gap-1.5 text-sm font-medium ${batteryColor}`}>
+        <div className={`flex items-center gap-1.5 text-md font-medium ${batteryColor}`}>
           <Battery className="h-4 w-4" />
           <span>{batteryLevel}%</span>
           {solarCharging && <Zap className="h-3 w-3 text-yellow-400" />}

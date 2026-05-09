@@ -60,7 +60,7 @@ function Skel() {
 // ── Action button variants ──────────────────────────────────────────────────────
 const BTN_SECONDARY = [
   'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5',
-  'text-sm font-medium transition-colors',
+  'text-md font-medium transition-colors',
   'border border-gray-200 bg-gray-50 text-gray-700',
   'hover:bg-gray-100',
   'dark:border-gray-700/60 dark:bg-gray-700/40 dark:text-gray-200 dark:hover:bg-gray-700',
@@ -68,7 +68,7 @@ const BTN_SECONDARY = [
 
 const BTN_PRIMARY = [
   'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5',
-  'text-sm font-medium text-white transition-colors',
+  'text-md font-medium text-white transition-colors',
   'bg-blue-600 hover:bg-blue-700',
 ].join(' ')
 
@@ -139,15 +139,15 @@ export default function Dashboard() {
               <Waves className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-base font-bold text-white">AquaDetect</h1>
-              <p className="text-xs text-blue-300/60">Autonomous Oil-Water Cleaning System</p>
+              <h1 className="text-lg font-bold text-white">AquaDetect</h1>
+              <p className="text-md text-blue-300/60">Autonomous Oil-Water Cleaning System</p>
             </div>
           </div>
 
           {/* Live state pills */}
           <div className="flex flex-wrap items-center gap-2.5">
             <div className={[
-              'flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium',
+              'flex items-center gap-2 rounded-full border px-3 py-1.5 text-md font-medium',
               isDeviceOnline
                 ? 'border-green-500/30 bg-green-500/10 text-green-400'
                 : 'border-gray-600/30 bg-gray-800/60 text-gray-400',
@@ -160,15 +160,15 @@ export default function Dashboard() {
             </div>
 
             <div className={[
-              'flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium',
+              'flex items-center gap-2 rounded-full border px-3 py-1.5 text-md font-medium',
               modeStyle.badge,
             ].join(' ')}>
               <span className={`h-1.5 w-1.5 rounded-full ${modeStyle.dot}`} />
               {modeLabel} Mode
             </div>
 
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <Signal className="h-3 w-3" />
+            <div className="flex items-center gap-1.5 text-md font-medium text-gray-500">
+              <Signal className="h-6 w-6" />
               {timeSince !== null ? `Last ping ${timeSince}s ago` : 'No signal'}
             </div>
           </div>
@@ -181,21 +181,21 @@ export default function Dashboard() {
         {/* Battery */}
         <div className={CARD}>
           <div className="mb-3 flex items-start justify-between">
-            <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            <span className="text-md font-semibold uppercase tracking-widest text-gray-400">
               Battery
             </span>
-            <Battery className={`h-4 w-4 ${batteryTextColor(batteryLevel)}`} />
+            <Battery className={`h-5 w-5 ${batteryTextColor(batteryLevel)}`} />
           </div>
           {isLoading
             ? <Skel />
             : <p className={`text-2xl font-bold ${batteryTextColor(batteryLevel)}`}>
                 {batteryLevel}%
               </p>}
-          <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-500">
+          <div className="mt-1 flex h-8 items-center gap-1.5 text-xs text-gray-500">
             <span>{fmt(batteryVoltage, ' V')}</span>
             {solarCharging && (
               <span className="flex items-center gap-0.5 text-yellow-400">
-                <Zap className="h-3 w-3" /> Charging
+                <Zap className="h-4 w-4" /> Charging
               </span>
             )}
           </div>
@@ -210,15 +210,15 @@ export default function Dashboard() {
         {/* Oil Sensor */}
         <div className={CARD}>
           <div className="mb-3 flex items-start justify-between">
-            <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            <span className="text-md font-semibold uppercase tracking-widest text-gray-400">
               Oil Sensor
             </span>
-            <Droplets className={`h-4 w-4 ${oilDetected ? 'text-red-400' : 'text-green-400'}`} />
+            <Droplets className={`h-5 w-5 ${oilDetected ? 'text-red-400' : 'text-green-400'}`} />
           </div>
           <p className={`text-2xl font-bold ${oilDetected ? 'text-red-400' : 'text-green-400'}`}>
             {oilDetected ? 'Detected' : 'Clear'}
           </p>
-          <p className="mt-1 text-xs text-gray-500">Capacitive proximity</p>
+          <p className="mt-1 flex h-8 items-center text-sm text-gray-500">Capacitive proximity</p>
           <div className={[
             'mt-3 h-1.5 w-full rounded-full',
             oilDetected ? 'bg-red-500 animate-pulse' : 'bg-green-500',
@@ -228,17 +228,17 @@ export default function Dashboard() {
         {/* Pump */}
         <div className={CARD}>
           <div className="mb-3 flex items-start justify-between">
-            <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            <span className="text-md font-semibold uppercase tracking-widest text-gray-400">
               Pump
             </span>
-            <Waves className={`h-4 w-4 ${pumpRunning ? 'text-blue-400' : 'text-gray-400'}`} />
+            <Waves className={`h-5 w-5 ${pumpRunning ? 'text-blue-400' : 'text-gray-400'}`} />
           </div>
           {isLoading
             ? <Skel />
             : <p className={`text-2xl font-bold ${pumpRunning ? 'text-blue-400' : 'text-gray-400'}`}>
                 {pumpRunning ? 'Running' : 'Idle'}
               </p>}
-          <p className="mt-1 text-xs text-gray-500">Collection pump</p>
+          <p className="mt-1 flex h-8 items-center text-sm text-gray-500">Collection pump</p>
           <div className={[
             'mt-3 h-1.5 w-full rounded-full',
             pumpRunning ? 'bg-blue-500 animate-pulse' : 'bg-gray-600',
@@ -248,15 +248,15 @@ export default function Dashboard() {
         {/* GPS Fix */}
         <div className={CARD}>
           <div className="mb-3 flex items-start justify-between">
-            <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            <span className="text-md font-semibold uppercase tracking-widest text-gray-400">
               GPS
             </span>
-            <MapPin className={`h-4 w-4 ${hasGpsFix ? 'text-cyan-400' : 'text-gray-400'}`} />
+            <MapPin className={`h-5 w-5 ${hasGpsFix ? 'text-cyan-400' : 'text-gray-400'}`} />
           </div>
           <p className={`text-2xl font-bold ${hasGpsFix ? 'text-cyan-400' : 'text-gray-400'}`}>
             {hasGpsFix ? 'Fix' : 'No Fix'}
           </p>
-          <div className="mt-1 space-y-0.5">
+          <div className="mt-1 flex h-8 flex-col justify-center space-y-0.5">
             <p className="font-mono text-xs text-gray-500">{fmt(lat)}</p>
             <p className="font-mono text-xs text-gray-500">{fmt(lng)}</p>
           </div>
@@ -268,31 +268,31 @@ export default function Dashboard() {
       </div>
 
       {/* ══ ROW 2 — MAP + RIGHT PANEL ═════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
 
         {/* Live Map — takes 2/3 of the row */}
-        <div className={`${CARD} lg:col-span-2`}>
+        <div className={`${CARD} flex flex-col lg:col-span-2`}>
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-blue-400" />
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+              <MapPin className="h-5 w-5 text-blue-400" />
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
                 Live Location
               </p>
             </div>
             <button
               type="button"
               onClick={() => navigate('/map')}
-              className="flex items-center gap-1 text-xs text-blue-400 transition-colors hover:text-blue-300"
+              className="flex items-center gap-1 text-lg text-blue-400 transition-colors hover:text-blue-300"
             >
-              Full Map <ChevronRight className="h-3.5 w-3.5" />
+              Full Map <ChevronRight className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="h-80 overflow-hidden rounded-lg ring-1 ring-gray-200 dark:ring-gray-700/40">
+          <div className="mx-1 mt-5 mb-2 overflow-hidden rounded-lg ring-1 ring-gray-200 dark:ring-gray-700/40" style={{ height: '420px' }}>
             <MapContainer
               center={[14.5995, 120.9842]}
               zoom={15}
-              className="h-full w-full"
+              style={{ height: '100%', width: '100%' }}
               zoomControl={true}
             >
               <TileLayer
@@ -321,7 +321,7 @@ export default function Dashboard() {
 
           {/* Quick Actions */}
           <div className={CARD}>
-            <p className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+            <p className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
               Quick Actions
             </p>
 
@@ -379,7 +379,7 @@ export default function Dashboard() {
                 onClick={emergencyStop}
                 className={[
                   'flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5',
-                  'text-sm font-bold text-white',
+                  'text-md font-bold text-white',
                   'bg-red-600 hover:bg-red-700 active:bg-red-800',
                   'shadow-md shadow-red-900/30 transition-colors',
                   'ring-1 ring-red-500/20',
@@ -395,32 +395,32 @@ export default function Dashboard() {
           <div className={CARD}>
             <div className="mb-3 flex items-center gap-2">
               <Compass className="h-4 w-4 text-cyan-400" />
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
                 Navigation
               </p>
             </div>
 
             <div className={FIELD_ROW}>
-              <span className="text-xs text-gray-400">Heading</span>
+              <span className="text-sm text-gray-400">Heading</span>
               {isLoading
                 ? <Skel />
-                : <span className="font-mono text-sm font-medium text-gray-200 dark:text-gray-200">
+                : <span className="font-mono text-sm font-medium text-gray-200 dark:text-gray-200 min-w-[3rem] text-right">
                     {fmt(heading, '°')}
                   </span>}
             </div>
             <div className={FIELD_ROW}>
-              <span className="text-xs text-gray-400">Latitude</span>
+              <span className="text-sm text-gray-400">Latitude</span>
               {isLoading
                 ? <Skel />
-                : <span className="font-mono text-sm font-medium text-gray-200 dark:text-gray-200">
+                : <span className="font-mono text-sm font-medium text-gray-200 dark:text-gray-200 min-w-[3rem] text-right">
                     {fmt(lat)}
                   </span>}
             </div>
             <div className={FIELD_ROW}>
-              <span className="text-xs text-gray-400">Longitude</span>
+              <span className="text-sm text-gray-400">Longitude</span>
               {isLoading
                 ? <Skel />
-                : <span className="font-mono text-sm font-medium text-gray-200 dark:text-gray-200">
+                : <span className="font-mono text-sm font-medium text-gray-200 dark:text-gray-200 min-w-[3rem] text-right">
                     {fmt(lng)}
                   </span>}
             </div>

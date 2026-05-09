@@ -86,7 +86,7 @@ export default function AlertBanner() {
   if (active.length === 0) return null
 
   return (
-    <div className="transition-all duration-300 ease-in-out">
+    <div className="mt-1.5 transition-all duration-300 ease-in-out">
       {active.map(({ id, icon: Icon, message, cls }) => (
         <div
           key={id}
