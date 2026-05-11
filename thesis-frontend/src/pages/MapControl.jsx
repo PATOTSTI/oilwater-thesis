@@ -34,13 +34,13 @@ const INPUT = [
 
 const BTN_PRIMARY = [
   'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5',
-  'text-sm font-medium text-white transition-colors',
+  'text-md font-medium text-white transition-colors',
   'bg-blue-600 hover:bg-blue-700 disabled:opacity-50',
 ].join(' ')
 
 const BTN_SECONDARY = [
   'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5',
-  'text-sm font-medium transition-colors',
+  'text-md font-medium transition-colors',
   'border border-gray-200 bg-gray-50 text-gray-700',
   'hover:bg-gray-100',
   'dark:border-gray-700/60 dark:bg-gray-700/40 dark:text-gray-200 dark:hover:bg-gray-700',
@@ -175,14 +175,14 @@ export default function MapControl() {
       <div className={`${CARD} flex-1`}>
 
         <div className="mb-3 flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-blue-400" />
-          <p className="text-sm font-semibold text-gray-900 dark:text-white">
+          <MapPin className="h-5 w-5 text-blue-400" />
+          <p className="text-lg font-semibold text-gray-900 dark:text-white">
             Live Location
           </p>
         </div>
 
         {/* Leaflet map */}
-        <div className="h-[calc(100vh-220px)] min-h-96 overflow-hidden rounded-lg ring-1 ring-gray-200 dark:ring-gray-700/40">
+        <div className="h-[calc(100vh-220px)] mt-6 min-h-96 overflow-hidden rounded-lg ring-1 ring-gray-200 dark:ring-gray-700/40">
           <MapContainer
             center={[14.5995, 120.9842]}
             zoom={16}
@@ -269,8 +269,8 @@ export default function MapControl() {
             { color: 'bg-red-500',    label: 'Target' },
             { color: 'bg-yellow-500', label: 'Detection' },
           ].map(({ color, label }) => (
-            <span key={label} className="flex items-center gap-1.5 text-xs text-gray-400">
-              <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
+            <span key={label} className="flex items-center gap-1.5 text-md text-gray-400">
+              <span className={`h-4 w-4 rounded-full ${color}`} />
               {label}
             </span>
           ))}
@@ -284,7 +284,7 @@ export default function MapControl() {
         <div className={CARD}>
           <div className="mb-3 flex items-center gap-2">
             <Compass className="h-4 w-4 text-cyan-400" />
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+            <p className="text-md font-semibold text-gray-900 dark:text-white">
               Current Position
             </p>
           </div>
@@ -323,13 +323,13 @@ export default function MapControl() {
         <div className={CARD}>
           <div className="mb-3 flex items-center gap-2">
             <Navigation className="h-4 w-4 text-blue-400" />
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+            <p className="text-md font-semibold text-gray-900 dark:text-white">
               Navigate To
             </p>
           </div>
 
           <div className="mb-3">
-            <label className="mb-1.5 block text-xs font-medium text-gray-400">
+            <label className="mb-1.5 block text-md font-medium text-gray-400">
               Target Latitude
             </label>
             <input
@@ -343,7 +343,7 @@ export default function MapControl() {
           </div>
 
           <div className="mb-1">
-            <label className="mb-1.5 block text-xs font-medium text-gray-400">
+            <label className="mb-1.5 block text-md font-medium text-gray-400">
               Target Longitude
             </label>
             <input
@@ -357,7 +357,7 @@ export default function MapControl() {
           </div>
 
           {navError && (
-            <p className="mt-1.5 text-xs text-red-400">{navError}</p>
+            <p className="mt-1.5 text-md text-red-400">{navError}</p>
           )}
 
           <button
@@ -404,7 +404,7 @@ export default function MapControl() {
         {/* Card 3 — Past Oil Detections */}
         <div className={CARD}>
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+            <p className="text-md font-semibold text-gray-900 dark:text-white">
               Past Detections
             </p>
             <button
@@ -426,7 +426,7 @@ export default function MapControl() {
           )}
 
           {!detectionsLoading && detectionsError && (
-            <p className="text-xs text-red-400">{detectionsError}</p>
+            <p className="text-md text-red-400">{detectionsError}</p>
           )}
 
           {!detectionsLoading && !detectionsError && detections.length === 0 && (
@@ -475,7 +475,7 @@ export default function MapControl() {
                           'detection',
                           d.detection_id
                         )}
-                        className="text-xs font-medium text-blue-400 transition-colors hover:text-blue-300"
+                        className="text-md font-medium text-blue-400 transition-colors hover:text-blue-300"
                       >
                         Navigate
                       </button>
