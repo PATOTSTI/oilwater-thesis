@@ -40,8 +40,8 @@ export default function Sidebar() {
     >
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex h-14 flex-shrink-0 items-center border-b border-gray-200 px-3 dark:border-gray-700">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
-          AD
+        <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl bg-blue-600">
+          <img src="/web-icon.svg" alt="AquaDetect" className="h-full w-full" />
         </div>
         <span className="ml-3 text-lg font-bold whitespace-nowrap text-gray-900 dark:text-white">
           AquaDetect
@@ -80,7 +80,7 @@ export default function Sidebar() {
           onClick={toggleTheme}
           className={[
             'mb-1 flex w-full items-center rounded-lg px-3 py-2.5 transition-colors',
-            'text-gray-400 hover:bg-gray-800 hover:text-white',
+            'text-gray-500 hover:bg-gray-100 hover:text-gray-900',
             'dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white',
           ].join(' ')}
         >

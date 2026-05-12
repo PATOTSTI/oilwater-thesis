@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, useMap } from 'react-leaflet'
 import {
   Battery, Droplets, Waves, MapPin, Compass,
-  Home, Navigation, Gamepad2, AlertOctagon,
-  Signal, ChevronRight, Zap,
+  Home, Navigation, Gamepad2,
+  Signal, ChevronRight, Zap, Clock,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useCommand } from '../hooks/useCommand'
@@ -15,7 +15,7 @@ import { setHome } from '../api/endpoints'
 // ── Tailwind helpers ────────────────────────────────────────────────────────────
 const CARD = [
   'rounded-xl border p-5 shadow-sm',
-  'bg-white border-gray-200',
+  'bg-white border-gray-200/80',
   'dark:bg-gray-800/80 dark:border-gray-700/60',
 ].join(' ')
 
@@ -24,14 +24,6 @@ const FIELD_ROW = [
   'border-b border-gray-100 dark:border-gray-700/40',
   'last:border-0',
 ].join(' ')
-
-const MODE_COLORS = {
-  manual:    { badge: 'border-blue-500/30 bg-blue-500/10 text-blue-400',   dot: 'bg-blue-400' },
-  automatic: { badge: 'border-purple-500/30 bg-purple-500/10 text-purple-400', dot: 'bg-purple-400' },
-  cleaning:  { badge: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400',   dot: 'bg-cyan-400' },
-  returning: { badge: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400', dot: 'bg-yellow-400' },
-  standby:   { badge: 'border-gray-600/30 bg-gray-700/30 text-gray-400',   dot: 'bg-gray-500' },
-}
 
 const batteryTextColor = (lvl) =>
   lvl > 50 ? 'text-green-400' : lvl >= 20 ? 'text-yellow-400' : 'text-red-400 animate-pulse'
@@ -54,7 +46,7 @@ function MapController({ lat, lng, online }) {
 }
 
 function Skel() {
-  return <span className="inline-block h-5 w-16 animate-pulse rounded bg-gray-700/40" />
+  return <span className="inline-block h-5 w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-700/40" />
 }
 
 // ── Action button variants ──────────────────────────────────────────────────────
@@ -82,7 +74,7 @@ export default function Dashboard() {
 
   const status = deviceStatus
   const isLoading = deviceStatus === null
-  const { sendCommand, emergencyStop } = useCommand()
+  const { sendCommand } = useCommand()
   const { navigateHome, error: navError, isSuccess: navSuccess } = useNavigation()
 
   const [homeSuccess, setHomeSuccess] = useState(false)
@@ -108,10 +100,6 @@ export default function Dashboard() {
   const timeSince  = status?.time_since_last_update  ?? null
   const pumpRunning = status?.pump_status === true
 
-  const displayMode = status?.esp32_mode ?? currentMode ?? 'standby'
-  const modeLabel   = displayMode.charAt(0).toUpperCase() + displayMode.slice(1)
-  const modeStyle   = MODE_COLORS[displayMode] ?? MODE_COLORS.standby
-
   const fmt = (v, suffix = '') =>
     v !== null && v !== undefined ? `${v}${suffix}` : '--'
 
@@ -123,8 +111,9 @@ export default function Dashboard() {
       {/* ══ HERO BANNER — System identity + live state ══════════════════════ */}
       <div className={[
         'relative overflow-hidden rounded-2xl border p-5 shadow-md',
-        'border-blue-900/30 dark:border-blue-800/20',
-        'bg-gradient-to-r from-slate-900 via-blue-950/80 to-slate-900',
+        'border-blue-300/60 dark:border-blue-800/20',
+        'bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700',
+        'dark:from-slate-900 dark:via-blue-950/80 dark:to-slate-900',
       ].join(' ')}>
         {/* Decorative glow blobs */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -135,42 +124,41 @@ export default function Dashboard() {
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           {/* Identity */}
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/25">
-              <Waves className="h-6 w-6 text-white" />
-            </div>
+            <img
+              src="/otter-icon.svg"
+              alt="Otter"
+              className="h-20 w-20 flex-shrink-0 drop-shadow-md"
+            />
             <div>
               <h1 className="text-lg font-bold text-white">AquaDetect</h1>
-              <p className="text-md text-blue-300/60">Autonomous Oil-Water Cleaning System</p>
+              <p className="text-md text-blue-100/80 dark:text-blue-300/60">Autonomous Oil-Water Cleaning System</p>
             </div>
           </div>
 
-          {/* Live state pills */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          {/* Signal telemetry */}
+          <div className="flex flex-wrap items-center gap-4">
             <div className={[
-              'flex items-center gap-2 rounded-full border px-3 py-1.5 text-md font-medium',
+              'flex items-center gap-2 text-md font-medium',
               isDeviceOnline
-                ? 'border-green-500/30 bg-green-500/10 text-green-400'
-                : 'border-gray-600/30 bg-gray-800/60 text-gray-400',
+                ? 'text-green-300 dark:text-green-400'
+                : 'text-white/70 dark:text-gray-500',
             ].join(' ')}>
-              <span className={[
-                'h-1.5 w-1.5 rounded-full',
-                isDeviceOnline ? 'bg-green-400 animate-pulse' : 'bg-gray-500',
-              ].join(' ')} />
-              {isDeviceOnline ? 'Online' : 'Offline'}
-            </div>
-
-            <div className={[
-              'flex items-center gap-2 rounded-full border px-3 py-1.5 text-md font-medium',
-              modeStyle.badge,
-            ].join(' ')}>
-              <span className={`h-1.5 w-1.5 rounded-full ${modeStyle.dot}`} />
-              {modeLabel} Mode
-            </div>
-
-            <div className="flex items-center gap-1.5 text-md font-medium text-gray-500">
-              <Signal className="h-6 w-6" />
+              <Signal className="h-5 w-5" />
               {timeSince !== null ? `Last ping ${timeSince}s ago` : 'No signal'}
             </div>
+
+            {timeSince !== null && (
+              <div className="flex items-center gap-1.5 text-md font-medium text-white/55 dark:text-gray-500">
+                <Clock className="h-4 w-4" />
+                <span>
+                  {timeSince < 5
+                    ? 'Signal strong'
+                    : timeSince < 10
+                    ? 'Signal degraded'
+                    : 'Signal lost'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -241,7 +229,7 @@ export default function Dashboard() {
           <p className="mt-1 flex h-8 items-center text-sm text-gray-500">Collection pump</p>
           <div className={[
             'mt-3 h-1.5 w-full rounded-full',
-            pumpRunning ? 'bg-blue-500 animate-pulse' : 'bg-gray-600',
+            pumpRunning ? 'bg-blue-500 animate-pulse' : 'bg-gray-300 dark:bg-gray-600',
           ].join(' ')} />
         </div>
 
@@ -262,7 +250,7 @@ export default function Dashboard() {
           </div>
           <div className={[
             'mt-3 h-1.5 w-full rounded-full',
-            hasGpsFix ? 'bg-cyan-500' : 'bg-gray-600',
+            hasGpsFix ? 'bg-cyan-500' : 'bg-gray-300 dark:bg-gray-600',
           ].join(' ')} />
         </div>
       </div>
@@ -371,24 +359,6 @@ export default function Dashboard() {
                 Manual Control
               </button>
             </div>
-
-            {/* Emergency Stop — visually separated danger zone */}
-            <div className="mt-3 border-t border-red-900/20 pt-3">
-              <button
-                type="button"
-                onClick={emergencyStop}
-                className={[
-                  'flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5',
-                  'text-md font-bold text-white',
-                  'bg-red-600 hover:bg-red-700 active:bg-red-800',
-                  'shadow-md shadow-red-900/30 transition-colors',
-                  'ring-1 ring-red-500/20',
-                ].join(' ')}
-              >
-                <AlertOctagon className="h-4 w-4 flex-shrink-0" />
-                Emergency Stop
-              </button>
-            </div>
           </div>
 
           {/* Navigation telemetry */}
@@ -404,7 +374,7 @@ export default function Dashboard() {
               <span className="text-sm text-gray-400">Heading</span>
               {isLoading
                 ? <Skel />
-                : <span className="font-mono text-sm font-medium text-gray-200 dark:text-gray-200 min-w-[3rem] text-right">
+                : <span className="font-mono text-sm font-medium text-gray-700 dark:text-gray-200 min-w-[3rem] text-right">
                     {fmt(heading, '°')}
                   </span>}
             </div>
@@ -412,7 +382,7 @@ export default function Dashboard() {
               <span className="text-sm text-gray-400">Latitude</span>
               {isLoading
                 ? <Skel />
-                : <span className="font-mono text-sm font-medium text-gray-200 dark:text-gray-200 min-w-[3rem] text-right">
+                : <span className="font-mono text-sm font-medium text-gray-700 dark:text-gray-200 min-w-[3rem] text-right">
                     {fmt(lat)}
                   </span>}
             </div>
@@ -420,7 +390,7 @@ export default function Dashboard() {
               <span className="text-sm text-gray-400">Longitude</span>
               {isLoading
                 ? <Skel />
-                : <span className="font-mono text-sm font-medium text-gray-200 dark:text-gray-200 min-w-[3rem] text-right">
+                : <span className="font-mono text-sm font-medium text-gray-700 dark:text-gray-200 min-w-[3rem] text-right">
                     {fmt(lng)}
                   </span>}
             </div>

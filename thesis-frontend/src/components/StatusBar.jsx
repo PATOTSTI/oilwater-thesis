@@ -18,11 +18,11 @@ const ROUTE_TITLES = {
 
 // Mode → Tailwind colour classes
 const MODE_COLORS = {
-  manual:    'bg-blue-500/20 text-blue-400',
-  automatic: 'bg-purple-500/20 text-purple-400',
-  cleaning:  'bg-cyan-500/20 text-cyan-400',
-  returning: 'bg-yellow-500/20 text-yellow-400',
-  standby:   'bg-gray-500/20 text-gray-400',
+  manual:    'border-blue-500/30   bg-blue-500/10   text-blue-600   dark:text-blue-400',
+  automatic: 'border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400',
+  cleaning:  'border-cyan-500/30   bg-cyan-500/10   text-cyan-600   dark:text-cyan-400',
+  returning: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+  standby:   'border-gray-300      bg-gray-100      text-gray-500   dark:border-gray-600 dark:bg-gray-700/40 dark:text-gray-400',
 }
 
 export default function StatusBar() {
@@ -67,18 +67,20 @@ export default function StatusBar() {
       <div className="flex items-center gap-3">
         {/* Connection pill */}
         <div className={[
-          'flex items-center gap-2 rounded-full px-3 py-1 text-md font-medium',
-          isDeviceOnline ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400',
+          'flex items-center gap-2 rounded-full border px-3 py-1 text-md font-medium',
+          isDeviceOnline
+            ? 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400'
+            : 'border-gray-300 bg-gray-100 text-gray-500 dark:border-gray-600 dark:bg-gray-700/40 dark:text-gray-400',
         ].join(' ')}>
           <span className={[
             'h-2 w-2 rounded-full',
-            isDeviceOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-500',
+            isDeviceOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-400 dark:bg-gray-500',
           ].join(' ')} />
           {isDeviceOnline ? 'Online' : 'Offline'}
         </div>
 
         {/* Mode badge */}
-        <div className={`rounded-full px-3 py-1 text-md font-medium ${modeColor}`}>
+        <div className={`rounded-full border px-3 py-1 text-md font-medium ${modeColor}`}>
           {modeLabel}
         </div>
       </div>

@@ -18,7 +18,7 @@ function App() {
     // the "dark" class to <html> — the universal ancestor for all elements.
     // overflow-hidden prevents a double scrollbar from appearing alongside
     // the fixed sidebar.
-    <div className="flex h-screen overflow-hidden bg-white text-gray-900 dark:bg-gray-950 dark:text-white">
+    <div className="flex h-screen overflow-hidden bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-white">
       {/* Fixed sidebar — always 64 px wide in collapsed state */}
       <Sidebar />
 

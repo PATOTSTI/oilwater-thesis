@@ -57,28 +57,28 @@ export default function AlertBanner() {
       condition: lowBatteryWarning,
       icon:      BatteryLow,
       message:   'LOW BATTERY — Device is returning to home position automatically',
-      cls:       'bg-red-500/20 border-red-500 text-red-400',
+      cls:       'bg-red-50 border-red-400 text-red-700 dark:bg-red-500/20 dark:border-red-500 dark:text-red-400',
     },
     {
       id:        'device_offline',
       condition: !isDeviceOnline,
       icon:      WifiOff,
       message:   'DEVICE OFFLINE — No status updates received from device',
-      cls:       'bg-gray-500/20 border-gray-500 text-gray-400',
+      cls:       'bg-gray-100 border-gray-400 text-gray-600 dark:bg-gray-500/20 dark:border-gray-500 dark:text-gray-400',
     },
     {
       id:        'oil_detected',
       condition: oilDetected,
       icon:      Droplets,
       message:   'OIL DETECTED — Capacitive sensor detected oil presence on water surface',
-      cls:       'bg-yellow-500/20 border-yellow-500 text-yellow-400',
+      cls:       'bg-amber-50 border-amber-400 text-amber-700 dark:bg-yellow-500/20 dark:border-yellow-500 dark:text-yellow-400',
     },
     {
       id:        'cleaning_active',
       condition: currentMode === 'cleaning',
       icon:      Waves,
       message:   'CLEANING IN PROGRESS — Spiral pattern is currently active',
-      cls:       'bg-cyan-500/20 border-cyan-500 text-cyan-400',
+      cls:       'bg-cyan-50 border-cyan-400 text-cyan-700 dark:bg-cyan-500/20 dark:border-cyan-500 dark:text-cyan-400',
     },
   ]
 
