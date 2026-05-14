@@ -1,5 +1,41 @@
-<<<<<<< HEAD
+# Project-specific
+/.claude
+
+# Environment files / secrets
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
 venv/
-=======
-venv/
->>>>>>> 2627c5e77dbf79142a6fab8dda3bd3bb324f7ca1
+
+# Node.js / npm
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Logs
+logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Editors
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

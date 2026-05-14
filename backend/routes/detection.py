@@ -55,7 +55,7 @@ ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png"}
 
 # Detections with confidence below this value are discarded (also enforced
 # inside ml/detector.py — both filters run to be safe)
-CONFIDENCE_THRESHOLD = 0.40
+CONFIDENCE_THRESHOLD = 0.355 # Detection page: optimal threshold from V6 F1-Confidence curve
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +177,9 @@ async def detect_oil(
     history_entries: list[dict] = []        # flat dicts for lightweight storage
 
     for raw in raw_detections:
+        if raw["confidence"] < CONFIDENCE_THRESHOLD:
+            continue
+
         x1, y1, x2, y2 = raw["x1"], raw["y1"], raw["x2"], raw["y2"]
 
         # Bounding-box centre pixel
@@ -415,8 +418,8 @@ def list_detections(
 # so that screening casts a wider net (lower bar) and the full detection endpoint
 # applies a stricter quality bar for geo-referenced results.
 # ---------------------------------------------------------------------------
-WITH_OIL_THRESHOLD  = 0.60
-UNCERTAIN_THRESHOLD = 0.35
+WITH_OIL_THRESHOLD  = 0.50   # Batch screening: "with_oil" threshold (V6 F1 peak zone)
+UNCERTAIN_THRESHOLD = 0.30   # Batch screening: "uncertain" buffer zone lower bound
 
 
 @router.post(
