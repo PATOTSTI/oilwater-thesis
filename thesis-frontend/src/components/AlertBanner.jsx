@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BatteryLow, WifiOff, Droplets, Waves, X } from 'lucide-react'
+import { BatteryLow, WifiOff, Droplets, Waves, AlertTriangle, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 // ── Reappear intervals (ms); null = stays dismissed until condition resets ──────
@@ -11,8 +11,15 @@ const REAPPEAR_INTERVALS = {
 }
 
 export default function AlertBanner() {
-  const { lowBatteryWarning, isDeviceOnline, oilDetected, currentMode } = useApp()
+  const { lowBatteryWarning, isDeviceOnline, oilDetected, currentMode, dataUpdatedAt } = useApp()
   const [dismissedAt, setDismissedAt] = useState({})
+  const [now, setNow] = useState(Date.now())
+
+  // Tick every second so the "no data" counter stays live
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   // ── Dismiss handler ─────────────────────────────────────────────────────────
   const handleDismiss = (alertId) => {
@@ -50,6 +57,10 @@ export default function AlertBanner() {
       setDismissedAt(prev => { const u = { ...prev }; delete u.cleaning_active; return u })
   }, [currentMode])
 
+  // ── No-data warning — triggers when no successful poll for > 5 s ────────────
+  const secsSinceData = dataUpdatedAt ? Math.floor((now - dataUpdatedAt) / 1000) : null
+  const showNoDataBanner = secsSinceData != null && secsSinceData >= 5
+
   // ── Alert definitions ────────────────────────────────────────────────────────
   const ALERTS = [
     {
@@ -57,36 +68,46 @@ export default function AlertBanner() {
       condition: lowBatteryWarning,
       icon:      BatteryLow,
       message:   'LOW BATTERY — Device is returning to home position automatically',
-      cls:       'bg-red-50 border-red-400 text-red-700 dark:bg-red-500/20 dark:border-red-500 dark:text-red-400',
+      cls:       'bg-red-500/20 border-red-500 text-red-400',
     },
     {
       id:        'device_offline',
       condition: !isDeviceOnline,
       icon:      WifiOff,
       message:   'DEVICE OFFLINE — No status updates received from device',
-      cls:       'bg-gray-100 border-gray-400 text-gray-600 dark:bg-gray-500/20 dark:border-gray-500 dark:text-gray-400',
+      cls:       'bg-gray-500/20 border-gray-500 text-gray-400',
     },
     {
       id:        'oil_detected',
       condition: oilDetected,
       icon:      Droplets,
       message:   'OIL DETECTED — Capacitive sensor detected oil presence on water surface',
-      cls:       'bg-amber-50 border-amber-400 text-amber-700 dark:bg-yellow-500/20 dark:border-yellow-500 dark:text-yellow-400',
+      cls:       'bg-yellow-500/20 border-yellow-500 text-yellow-400',
     },
     {
       id:        'cleaning_active',
       condition: currentMode === 'cleaning',
       icon:      Waves,
       message:   'CLEANING IN PROGRESS — Spiral pattern is currently active',
-      cls:       'bg-cyan-50 border-cyan-400 text-cyan-700 dark:bg-cyan-500/20 dark:border-cyan-500 dark:text-cyan-400',
+      cls:       'bg-cyan-500/20 border-cyan-500 text-cyan-400',
     },
   ]
 
   const active = ALERTS.filter(({ id, condition }) => shouldShow(id, condition))
-  if (active.length === 0) return null
+  if (active.length === 0 && !showNoDataBanner) return null
 
   return (
-    <div className="mt-1.5 transition-all duration-300 ease-in-out">
+    <div className="transition-all duration-300 ease-in-out">
+      {/* No-data warning — live counter, not dismissable */}
+      {showNoDataBanner && (
+        <div className="flex items-center border-l-4 px-6 py-2 bg-amber-500/20 border-amber-500 text-amber-400">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          <span className="ml-3 flex-1 text-sm font-medium">
+            ⚠ No data received for {secsSinceData}s — device may be unreachable
+          </span>
+        </div>
+      )}
+
       {active.map(({ id, icon: Icon, message, cls }) => (
         <div
           key={id}

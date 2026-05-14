@@ -9,10 +9,7 @@ import {
   Battery,
   Activity,
   ScrollText,
-  Moon,
-  Sun,
 } from 'lucide-react'
-import { useApp } from '../context/AppContext'
 
 const NAV_LINKS = [
   { label: 'Dashboard',      path: '/',          icon: LayoutDashboard, end: true },
@@ -27,8 +24,6 @@ const NAV_LINKS = [
 ]
 
 export default function Sidebar() {
-  const { theme, toggleTheme } = useApp()
-
   return (
     <div
       className={[
@@ -73,25 +68,6 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* ── Bottom ──────────────────────────────────────────────────────── */}
-      <div className="mt-auto border-t border-gray-200 px-2 pb-4 pt-4 dark:border-gray-700">
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className={[
-            'mb-1 flex w-full items-center rounded-lg px-3 py-2.5 transition-colors',
-            'text-gray-500 hover:bg-gray-100 hover:text-gray-900',
-            'dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white',
-          ].join(' ')}
-        >
-          {theme === 'dark'
-            ? <Moon className="h-5 w-5 flex-shrink-0" />
-            : <Sun  className="h-5 w-5 flex-shrink-0" />}
-          <span className="ml-3 text-sm font-medium">
-            {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
-          </span>
-        </button>
-      </div>
     </div>
   )
 }
