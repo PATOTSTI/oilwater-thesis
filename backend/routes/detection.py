@@ -13,9 +13,10 @@
 #      so the navigation system always has a fresh target GPS available.
 #
 # Routes in this file:
-#   POST /detect          → upload image, run YOLOv8, get geo-referenced results
-#   GET  /detect/history  → full rolling history of all saved detections
-#   GET  /detections      → paginated, filterable summary list
+#   POST /detect                → upload image, run YOLOv8, get geo-referenced results
+#   GET  /detect/history        → full rolling history of all saved detections
+#   GET  /detections            → paginated, filterable summary list
+#   POST /detect/screen-batch   → triage multiple drone images; no GPS required
 # ---------------------------------------------------------------------------
 
 import io
@@ -23,6 +24,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, UploadFile, File, Form, Query, HTTPException
+from typing import List
 from PIL import Image
 
 from core.state import app_state, MAX_DETECTION_HISTORY
@@ -41,6 +43,9 @@ from models.schemas import (
     CenterPixel,
     GPSCoords,
     StandardResponse,
+    BatchScreeningResponse,
+    ScreenedImage,
+    ScreeningStatus,
 )
 
 router = APIRouter()
@@ -50,7 +55,7 @@ ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png"}
 
 # Detections with confidence below this value are discarded (also enforced
 # inside ml/detector.py — both filters run to be safe)
-CONFIDENCE_THRESHOLD = 0.40
+CONFIDENCE_THRESHOLD = 0.355 # Detection page: optimal threshold from V6 F1-Confidence curve
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +177,9 @@ async def detect_oil(
     history_entries: list[dict] = []        # flat dicts for lightweight storage
 
     for raw in raw_detections:
+        if raw["confidence"] < CONFIDENCE_THRESHOLD:
+            continue
+
         x1, y1, x2, y2 = raw["x1"], raw["y1"], raw["x2"], raw["y2"]
 
         # Bounding-box centre pixel
@@ -394,4 +402,199 @@ def list_detections(
     return make_response(
         data=result.model_dump(),
         message=f"Returning {len(items)} of {total} detections.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /detect/screen-batch
+# ---------------------------------------------------------------------------
+# Confidence thresholds that determine each image's screening category.
+#
+#   WITH_OIL_THRESHOLD    — at or above this → "with_oil"   (model is confident)
+#   UNCERTAIN_THRESHOLD   — at or above this → "uncertain"  (borderline, needs review)
+#   Below UNCERTAIN       → "without_oil"                   (no meaningful detection)
+#
+# These are intentionally separate from CONFIDENCE_THRESHOLD used by POST /detect
+# so that screening casts a wider net (lower bar) and the full detection endpoint
+# applies a stricter quality bar for geo-referenced results.
+# ---------------------------------------------------------------------------
+WITH_OIL_THRESHOLD  = 0.50   # Batch screening: "with_oil" threshold (V6 F1 peak zone)
+UNCERTAIN_THRESHOLD = 0.30   # Batch screening: "uncertain" buffer zone lower bound
+
+
+@router.post(
+    "/detect/screen-batch",
+    response_model=StandardResponse,
+    summary="Screen a batch of drone images and sort them by oil presence",
+)
+async def screen_batch(
+    files: List[UploadFile] = File(
+        ...,
+        description=(
+            "One or more aerial drone images to screen. "
+            "Each file must be JPEG or PNG. Maximum 50 images per request."
+        ),
+    ),
+):
+    """Sort a batch of drone images into three categories without requiring GPS data.
+
+    This endpoint is designed for **post-flight triage** after copying images from
+    the drone SD card.  It answers only one question per image:
+    *"Does this image likely contain oil?"*
+
+    **Classification rules:**
+
+    | Category      | Condition                                        |
+    |---------------|--------------------------------------------------|
+    | `with_oil`    | best detection confidence ≥ 0.60                 |
+    | `uncertain`   | best detection confidence 0.35 – 0.59            |
+    | `without_oil` | no detection reaches 0.35 confidence             |
+
+    **No drone GPS, altitude, or heading is required.** Use POST /detect for
+    geo-referenced single-image analysis after identifying images with oil.
+
+    **Processing pipeline:**
+
+    1. Validate that at least one file was uploaded (max 50).
+    2. Check that the YOLOv8 model is loaded.
+    3. For each image:
+       a. Validate file type (JPEG / PNG only).
+       b. Decode with Pillow.
+       c. Run YOLOv8 inference with a low threshold (0.35) to catch uncertain cases.
+       d. Classify using the confidence thresholds above.
+    4. Return per-image results and overall summary counts.
+    """
+    # ---- Guard: at least 1 file, maximum 50 ----
+    if not files:
+        raise HTTPException(status_code=422, detail="No images were uploaded.")
+    if len(files) > 50:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Too many files: {len(files)} submitted. Maximum is 50 per request.",
+        )
+
+    # ---- Model availability check ----
+    model = app_state.get("model")
+    if model is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "YOLOv8 model is not loaded. "
+                "Ensure 'ml/best.pt' exists and restart the server."
+            ),
+        )
+
+    print(f"[POST /detect/screen-batch] Screening {len(files)} image(s).")
+
+    screened_at = datetime.now(timezone.utc)
+    results: list[ScreenedImage] = []
+
+    for upload in files:
+        filename = upload.filename or "unknown"
+
+        # ---- File type validation (per image) ----
+        if upload.content_type not in ALLOWED_CONTENT_TYPES:
+            # Return a graceful per-file error entry rather than aborting the whole batch
+            results.append(ScreenedImage(
+                filename=filename,
+                status=ScreeningStatus.without_oil,
+                best_confidence=0.0,
+                total_detections=0,
+                image_width=0,
+                image_height=0,
+            ))
+            print(
+                f"[POST /detect/screen-batch] Skipped '{filename}' — "
+                f"unsupported type: {upload.content_type}"
+            )
+            continue
+
+        # ---- Decode image ----
+        image_bytes = await upload.read()
+        try:
+            image = Image.open(io.BytesIO(image_bytes))
+        except Exception:
+            results.append(ScreenedImage(
+                filename=filename,
+                status=ScreeningStatus.without_oil,
+                best_confidence=0.0,
+                total_detections=0,
+                image_width=0,
+                image_height=0,
+            ))
+            print(f"[POST /detect/screen-batch] Could not decode '{filename}' — skipped.")
+            continue
+
+        img_width, img_height = image.size
+
+        # ---- Run inference with the lower screening threshold ----
+        raw_detections = run_inference(
+            model, image, confidence_threshold=UNCERTAIN_THRESHOLD
+        )
+
+        # ---- Classify ----
+        best_confidence = 0.0
+        if raw_detections:
+            best_confidence = max(d["confidence"] for d in raw_detections)
+
+        if best_confidence >= WITH_OIL_THRESHOLD:
+            status = ScreeningStatus.with_oil
+        elif best_confidence >= UNCERTAIN_THRESHOLD:
+            status = ScreeningStatus.uncertain
+        else:
+            status = ScreeningStatus.without_oil
+
+        results.append(ScreenedImage(
+            filename=filename,
+            status=status,
+            best_confidence=round(best_confidence, 4),
+            total_detections=len(raw_detections),
+            image_width=img_width,
+            image_height=img_height,
+        ))
+
+        print(
+            f"[POST /detect/screen-batch] '{filename}' → {status.value} "
+            f"(best_conf={best_confidence:.4f}, detections={len(raw_detections)})"
+        )
+
+    # ---- Build summary counts ----
+    with_oil_count    = sum(1 for r in results if r.status == ScreeningStatus.with_oil)
+    without_oil_count = sum(1 for r in results if r.status == ScreeningStatus.without_oil)
+    uncertain_count   = sum(1 for r in results if r.status == ScreeningStatus.uncertain)
+
+    print(
+        f"[POST /detect/screen-batch] Done — "
+        f"with_oil={with_oil_count}, "
+        f"without_oil={without_oil_count}, "
+        f"uncertain={uncertain_count}"
+    )
+
+    log_event(
+        "detection",
+        f"Batch screening complete: {len(results)} image(s) screened. "
+        f"with_oil={with_oil_count}, without_oil={without_oil_count}, uncertain={uncertain_count}.",
+        {
+            "total_images": len(results),
+            "with_oil_count": with_oil_count,
+            "without_oil_count": without_oil_count,
+            "uncertain_count": uncertain_count,
+        },
+    )
+
+    response_obj = BatchScreeningResponse(
+        total_images=len(results),
+        with_oil_count=with_oil_count,
+        without_oil_count=without_oil_count,
+        uncertain_count=uncertain_count,
+        results=results,
+        screened_at=screened_at,
+    )
+
+    return make_response(
+        data=response_obj.model_dump(),
+        message=(
+            f"Screening complete — {with_oil_count} with oil, "
+            f"{uncertain_count} uncertain, {without_oil_count} without oil."
+        ),
     )

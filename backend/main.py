@@ -15,6 +15,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -221,4 +222,16 @@ def health_check():
             "version": "1.0.0",
         },
         message="API is healthy.",
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+):
+    print("\n=== 422 ERROR ===")
+    print(f"Errors: {exc.errors()}")
+    print("=================\n")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()}
     )

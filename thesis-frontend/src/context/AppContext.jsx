@@ -19,10 +19,12 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../api/apiClient'
+import { setArm } from '../api/endpoints'
 
 // ── Context object ────────────────────────────────────────────────────────────
 const AppContext = createContext(null)
@@ -70,6 +72,24 @@ export function AppProvider({ children }) {
     }
   }, [theme])
 
+  // ── Latency tracking ──────────────────────────────────────────────────────
+  const [latencyMs, setLatencyMs] = useState(null)
+  const fetchStartRef = useRef(0)
+
+  // ── Motors armed state ────────────────────────────────────────────────────
+  // Mirrors backend app_state.motors_armed. The ESP32 only spins motors when
+  // GET /command reports armed=true, so every flip MUST also POST /arm.
+  const [motorsArmed, setMotorsArmedState] = useState(false)
+
+  const setMotorsArmed = useCallback(async (next) => {
+    setMotorsArmedState(next)
+    try {
+      await setArm(next)
+    } catch (err) {
+      console.error('[AppContext] POST /arm failed:', err)
+    }
+  }, [])
+
   // ── Status polling via React Query ────────────────────────────────────────
   // Polls GET /status every 3 s. On error the query data stays null so the app
   // keeps rendering; isDeviceOnline will be set to false automatically.
@@ -82,9 +102,11 @@ export function AppProvider({ children }) {
     // from useCommand / useMode / useNavigation refreshes this entry too.
     queryKey: ['deviceStatus'],
     queryFn: async () => {
+      fetchStartRef.current = Date.now()
       // apiClient's response interceptor already unwraps the Axios wrapper,
       // so `envelope` is the backend's { success, data, message, timestamp }.
       const envelope = await apiClient.get('/status')
+      setLatencyMs(Date.now() - fetchStartRef.current)
       if (!envelope.success) {
         throw new Error(envelope.message || 'Status fetch failed')
       }
@@ -113,6 +135,14 @@ export function AppProvider({ children }) {
 
   /** Maps to backend field `oil_detected`; defaults to false when offline. */
   const oilDetected = deviceStatus?.oil_detected ?? false
+
+  // Auto-disarm when device goes offline
+  useEffect(() => {
+    if (!isDeviceOnline && motorsArmed) {
+      setMotorsArmed(false)
+      console.log('[AppContext] Device offline — motors auto-disarmed')
+    }
+  }, [isDeviceOnline, motorsArmed, setMotorsArmed])
 
   // ── Derived battery fields ────────────────────────────────────────────────
   const batteryLevel    = deviceStatus?.battery_level   ?? 0
@@ -227,6 +257,14 @@ export function AppProvider({ children }) {
     batteryVoltage,
     solarCharging,
     lowBatteryWarning,
+
+    // Connection telemetry
+    latencyMs,
+    dataUpdatedAt,
+
+    // Motors armed
+    motorsArmed,
+    setMotorsArmed,
 
     // Alerts
     alerts,

@@ -29,6 +29,7 @@ from core.utils import (
 )
 from core.logger import log_event
 from models.schemas import (
+    ArmRequest,
     CommandRequest,
     CommandResponse,
     ModeRequest,
@@ -85,10 +86,16 @@ def get_command():
     """
     # Emergency stop is the highest-priority command — never override it
     if app_state["current_command"] == "emergency_stop":
+        # Force disarm so a follow-up poll keeps motors gated until operator re-arms
+        app_state["motors_armed"] = False
         print("[GET /command] Emergency stop active — returning 'emergency_stop'.")
         return make_response(
             # UPDATED: no speed/angle for emergency_stop (motors cut immediately)
-            data=CommandResponse(command="emergency_stop").model_dump(),
+            data=CommandResponse(
+                command="emergency_stop",
+                pump=False,
+                armed=False,
+            ).model_dump(),
             message="Emergency stop is active. All motors and pump halted.",
         )
 
@@ -110,7 +117,11 @@ def get_command():
             )
             print("[GET /command] Cleaning complete — switching to 'standby'.")
             return make_response(
-                data=CommandResponse(command="stop").model_dump(),
+                data=CommandResponse(
+                    command="stop",
+                    pump=app_state["pump_status"],
+                    armed=app_state["motors_armed"],
+                ).model_dump(),
                 message="Cleaning complete. Device returned to standby.",
             )
 
@@ -157,7 +168,11 @@ def get_command():
                 )
                 print("[GET /command] Cleaning complete — switching to 'standby'.")
                 return make_response(
-                    data=CommandResponse(command="stop").model_dump(),
+                    data=CommandResponse(
+                        command="stop",
+                        pump=app_state["pump_status"],
+                        armed=app_state["motors_armed"],
+                    ).model_dump(),
                     message="Cleaning complete. Device returned to standby.",
                 )
 
@@ -195,6 +210,8 @@ def get_command():
                 speed=effective_speed if nav_cmd != "stop" else None,
                 # UPDATED: include proportional rudder angle in the response
                 angle=nav_result["rudder_angle"] if nav_cmd != "stop" else None,
+                pump=app_state["pump_status"],
+                armed=app_state["motors_armed"],
             ).model_dump(),
             message=(
                 f"Cleaning waypoint command: '{nav_cmd}' | "
@@ -247,6 +264,8 @@ def get_command():
                 command=nav_cmd,
                 speed=nav_result["speed"] if nav_cmd != "stop" else None,
                 angle=nav_result["rudder_angle"] if nav_cmd != "stop" else None,
+                pump=app_state["pump_status"],
+                armed=app_state["motors_armed"],
             ).model_dump(),
             message=(
                 f"Auto-navigation: '{nav_cmd}' | "
@@ -262,7 +281,12 @@ def get_command():
         app_state["current_command"] = "return_home"
         print("[GET /command] Returning mode active — enforcing 'return_home'.")
         return make_response(
-            data=CommandResponse(command="return_home").model_dump(),
+            data=CommandResponse(
+                command="return_home",
+                speed=app_state["current_speed"],
+                pump=app_state["pump_status"],
+                armed=app_state["motors_armed"],
+            ).model_dump(),
             message="Returning to home. Command: 'return_home'.",
         )
 
@@ -278,6 +302,8 @@ def get_command():
             command=cmd,
             speed=app_state["current_speed"] if _is_movement else None,
             angle=app_state["current_rudder_angle"] if cmd == "set_rudder" else None,
+            pump=app_state["pump_status"],
+            armed=app_state["motors_armed"],
         ).model_dump(),
         message=f"Current command: '{cmd}'.",
     )
@@ -326,6 +352,8 @@ def set_command(body: CommandRequest):
     if body.command == "emergency_stop":
         app_state["current_command"] = "emergency_stop"
         app_state["pump_status"] = False
+        # Force disarm so operator must explicitly re-arm before motors run again
+        app_state["motors_armed"] = False
         log_event(
             "warning",
             "EMERGENCY STOP issued — all motors and pump halted.",
@@ -443,6 +471,42 @@ def set_command(body: CommandRequest):
 
 
 # ---------------------------------------------------------------------------
+# POST /arm
+# ---------------------------------------------------------------------------
+@router.post(
+    "/arm",
+    response_model=StandardResponse,
+    summary="Arm or disarm the motors",
+)
+def set_arm(body: ArmRequest):
+    """Toggle the motors_armed flag the ESP32 reads from GET /command.
+
+    The ESP32 firmware blocks all movement commands (forward, backward,
+    turn_*, forward_*, set_rudder) until it sees armed=true. Stop and
+    emergency_stop always work regardless. Pump also works regardless.
+
+    On disarm the backend also resets current_command to "stop" so the
+    ESP32 picks up the safe state on its next poll.
+    """
+    app_state["motors_armed"] = body.armed
+
+    if not body.armed:
+        app_state["current_command"] = "stop"
+
+    log_event(
+        "command",
+        f"Motors {'armed' if body.armed else 'disarmed'}.",
+        {"armed": body.armed},
+    )
+    print(f"[POST /arm] motors_armed = {body.armed}")
+
+    return make_response(
+        data={"armed": body.armed},
+        message=f"Motors {'armed' if body.armed else 'disarmed'}.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # POST /mode
 # ---------------------------------------------------------------------------
 @router.post(
@@ -506,6 +570,7 @@ def set_mode(body: ModeRequest):
         # Standby = everything off, device just sends status updates
         app_state["current_command"] = "stop"
         app_state["pump_status"] = False
+        app_state["motors_armed"] = False
         log_event(
             "mode_change",
             f"Mode changed: '{previous_mode}' → 'standby'. Motors and pump off.",

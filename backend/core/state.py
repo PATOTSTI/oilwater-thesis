@@ -53,6 +53,12 @@ class AppState:
         # What the backend wants the ESP32 to do; polled via GET /command.
         self.current_command: str = "stop"
 
+        # --- Motors armed flag ---
+        # Required by ESP32 firmware before any movement command will execute.
+        # Toggled by POST /arm from the dashboard's StatusBar arm confirmation.
+        # Forced False on emergency_stop and on POST /mode → "standby".
+        self.motors_armed: bool = False
+
         # UPDATED: Last PWM speed sent to the BTS7960 43A motor drivers (0–255).
         # Default 200 gives a good balance between speed and control for testing.
         # Updated by POST /command whenever a movement command includes a speed value.

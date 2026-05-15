@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import MapControl from './pages/MapControl'
 import ManualControl from './pages/ManualControl'
 import Detection from './pages/Detection'
+import BatchScreening from './pages/BatchScreening'
 import Cleaning from './pages/Cleaning'
 import Battery from './pages/Battery'
 import Sensors from './pages/Sensors'
@@ -17,13 +18,13 @@ function App() {
     // the "dark" class to <html> — the universal ancestor for all elements.
     // overflow-hidden prevents a double scrollbar from appearing alongside
     // the fixed sidebar.
-    <div className="flex h-screen overflow-hidden bg-white text-gray-900 dark:bg-gray-950 dark:text-white">
+    <div className="flex h-screen overflow-hidden bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-white">
       {/* Fixed sidebar — always 64 px wide in collapsed state */}
       <Sidebar />
 
-      {/* Content area — ml-16 (64 px) offsets the fixed sidebar so nothing
+      {/* Content area — ml-56 (224 px) offsets the fixed sidebar so nothing
           is hidden beneath it. flex-1 takes all remaining width. */}
-      <div className="ml-16 flex flex-1 flex-col overflow-hidden">
+      <div className="ml-56 flex flex-1 flex-col overflow-hidden">
         <StatusBar />
         {/* pt-14 offsets the fixed StatusBar (h-14 = 56 px). AlertBanner
             sits in normal flow directly below it, pushing main down
@@ -36,6 +37,7 @@ function App() {
               <Route path="/map" element={<MapControl />} />
               <Route path="/control" element={<ManualControl />} />
               <Route path="/detection" element={<Detection />} />
+              <Route path="/screening" element={<BatchScreening />} />
               <Route path="/cleaning" element={<Cleaning />} />
               <Route path="/battery" element={<Battery />} />
               <Route path="/sensors" element={<Sensors />} />

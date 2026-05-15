@@ -3,8 +3,14 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Manual control page for the AquaDetect dashboard.
  *
- * Left column  – Movement controls (D-pad, speed, rudder)
- * Right column – System controls (mode, pump, status, emergency stop)
+ * Left column  – Movement controls (D-pad + stop, speed, rudder)
+ * Right column – System controls (mode, pump, status)
+ *
+ * Color semantics:
+ *   Blue  → navigation actions (directional arrows, slider adjustments)
+ *   Amber → mode change buttons
+ *   Green → active/on states (pump running, connected)
+ *   Red   → stop / danger actions (motor stop, E-STOP in header)
  */
 
 import { useState, useEffect } from 'react'
@@ -13,13 +19,14 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
-  Square,
+  StopCircle,
   Waves,
   Play,
-  AlertOctagon,
+  Square,
   Loader2,
-  Info,
   AlertTriangle,
+  Shield,
+  ShieldOff,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useCommand } from '../hooks/useCommand'
@@ -27,9 +34,18 @@ import { useMode } from '../hooks/useMode'
 
 // ── Shared card style ─────────────────────────────────────────────────────────
 const cardClass =
-  'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-5'
+  'bg-gray-800 border border-gray-700 rounded-xl shadow-lg p-5'
 
-const titleClass = 'text-sm font-semibold text-gray-900 dark:text-white'
+const titleClass = 'text-sm font-semibold text-white'
+
+// Format elapsed seconds as HH:MM:SS
+function formatElapsed(ms) {
+  const secs = Math.floor(ms / 1000)
+  const h = String(Math.floor(secs / 3600)).padStart(2, '0')
+  const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0')
+  const s = String(secs % 60).padStart(2, '0')
+  return `${h}:${m}:${s}`
+}
 
 export default function ManualControl() {
   // ── Shared state across all movement cards ────────────────────────────────
@@ -38,43 +54,54 @@ export default function ManualControl() {
   const [activeKey, setActiveKey] = useState(null)
 
   // ── Right-column state ────────────────────────────────────────────────────
-  const [modeSuccess, setModeSuccess] = useState(false)   // "Mode changed!" flash
-  const [stopped, setStopped] = useState(false)            // emergency-stop flash
+  const [modeSuccess, setModeSuccess] = useState(false)
 
-  const { currentMode, deviceStatus } = useApp()
-  const { sendCommand, emergencyStop, isLoading: cmdLoading } = useCommand()
+  // ── Pump elapsed timer ────────────────────────────────────────────────────
+  const [pumpRunSince, setPumpRunSince] = useState(null)
+  const [pumpRunTime, setPumpRunTime] = useState('00:00:00')
+
+  // ── Status panel live clock ───────────────────────────────────────────────
+  const [statusNow, setStatusNow] = useState(Date.now())
+
+  const { currentMode, deviceStatus, dataUpdatedAt, motorsArmed, setMotorsArmed } = useApp()
+  const { sendCommand, isLoading: cmdLoading } = useCommand()
   const { changeMode, isLoading: modeLoading } = useMode()
 
   const isManual = currentMode === 'manual'
+  const pumpRunning = !!deviceStatus?.pump_status
 
-  // ── Mode badge colour helper ──────────────────────────────────────────────
-  const modeBadgeClass = (mode) => {
-    switch (mode) {
-      case 'manual':    return 'bg-blue-500/20 text-blue-400'
-      case 'automatic': return 'bg-purple-500/20 text-purple-400'
-      case 'cleaning':  return 'bg-cyan-500/20 text-cyan-400'
-      case 'returning': return 'bg-yellow-500/20 text-yellow-400'
-      default:          return 'bg-gray-500/20 text-gray-400'
+  // ── Pump run-time tracking ────────────────────────────────────────────────
+  useEffect(() => {
+    if (pumpRunning) {
+      setPumpRunSince(prev => prev ?? Date.now())
+    } else {
+      setPumpRunSince(null)
+      setPumpRunTime('00:00:00')
     }
-  }
+  }, [pumpRunning])
 
-  // ── Mode change handler — shows 2-second success toast ───────────────────
+  useEffect(() => {
+    if (!pumpRunSince) return
+    const t = setInterval(() => {
+      setPumpRunTime(formatElapsed(Date.now() - pumpRunSince))
+    }, 1000)
+    return () => clearInterval(t)
+  }, [pumpRunSince])
+
+  // ── Status panel 1-second ticker ─────────────────────────────────────────
+  useEffect(() => {
+    const t = setInterval(() => setStatusNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  // ── Mode change handler ───────────────────────────────────────────────────
   const handleModeChange = (mode) => {
     changeMode(mode)
     setModeSuccess(false)
-    // We poll until the mutation resolves; use a slight delay so the flag
-    // fires after the request completes (optimistic UX).
     setTimeout(() => {
       setModeSuccess(true)
       setTimeout(() => setModeSuccess(false), 2000)
     }, 600)
-  }
-
-  // ── Emergency stop handler — 1-second flash ───────────────────────────────
-  const handleEmergencyStop = () => {
-    emergencyStop()
-    setStopped(true)
-    setTimeout(() => setStopped(false), 1000)
   }
 
   // ── Keyboard support ──────────────────────────────────────────────────────
@@ -83,73 +110,75 @@ export default function ManualControl() {
 
     const handleKeyDown = (e) => {
       if (!ARROW_KEYS.includes(e.key)) return
-
-      // Always prevent browser scroll on arrow / space keys
       e.preventDefault()
 
-      // Only activate controls in manual mode
-      if (!isManual) return
+      if (e.key === ' ') {
+        sendCommand('stop', 0)
+        return
+      }
 
-      const keyName = e.key === ' ' ? 'Space' : e.key
+      if (!isManual || !motorsArmed) return
+
+      const keyName = e.key
       setActiveKey(keyName)
 
       switch (e.key) {
-        case 'ArrowUp':
-          sendCommand('forward', speed)
-          break
-        case 'ArrowDown':
-          sendCommand('backward', speed)
-          break
-        case 'ArrowLeft':
-          sendCommand('turn_left', speed)
-          break
-        case 'ArrowRight':
-          sendCommand('turn_right', speed)
-          break
-        case ' ':
-          sendCommand('stop', 0)
-          break
+        case 'ArrowUp':    sendCommand('forward',    speed);       break
+        case 'ArrowDown':  sendCommand('backward',   speed);       break
+        case 'ArrowLeft':  sendCommand('turn_left',  speed, -45);  break
+        case 'ArrowRight': sendCommand('turn_right', speed,  45);  break
       }
     }
 
     const handleKeyUp = (e) => {
       if (!ARROW_KEYS.includes(e.key)) return
       setActiveKey(null)
+      if (e.key !== ' ' && isManual) {
+        sendCommand('stop', 0)
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
-
-    // Cleanup on unmount or when deps change
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [isManual, speed, sendCommand])
+  }, [isManual, motorsArmed, speed, sendCommand])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  /** Returns Tailwind classes for a directional button based on its active key. */
   const dirBtnClass = (keyName) =>
     [
       'w-14 h-14 rounded-xl flex items-center justify-center',
-      'transition-all duration-100 text-xs font-bold',
-      activeKey === keyName
-        ? 'bg-blue-400 scale-95 text-white'
-        : 'bg-blue-600 hover:bg-blue-500 text-white',
+      'transition-all duration-100 font-bold',
+      !motorsArmed
+        ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
+        : activeKey === keyName
+          ? 'bg-blue-400 scale-95 text-white'
+          : 'bg-blue-600 hover:bg-blue-500 text-white',
     ].join(' ')
 
-  /** Dynamic colour for the rudder angle display. */
   const rudderColor =
-    rudderAngle === 0
-      ? 'text-blue-400'
-      : rudderAngle < 0
-        ? 'text-yellow-400'
-        : 'text-orange-400'
+    rudderAngle === 0 ? 'text-blue-400'
+    : rudderAngle < 0 ? 'text-yellow-400'
+    : 'text-orange-400'
 
-  /** Descriptive label shown below the rudder angle number. */
   const rudderLabel =
-    rudderAngle === 0 ? 'Straight' : rudderAngle < 0 ? 'Turning Left' : 'Turning Right'
+    rudderAngle === 0 ? 'Straight'
+    : rudderAngle < 0 ? 'Turning Left'
+    : 'Turning Right'
+
+  // Stale detection — values older than 3 s turn amber
+  const timeSinceLastPoll = dataUpdatedAt
+    ? (statusNow - dataUpdatedAt) / 1000
+    : null
+  const isStale = timeSinceLastPoll != null && timeSinceLastPoll > 3
+
+  // Live "time since update" counter (increments every second)
+  const liveSinceUpdate = timeSinceLastPoll != null
+    ? `${Math.floor(timeSinceLastPoll)}s ago`
+    : '--'
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -161,58 +190,78 @@ export default function ManualControl() {
         ══════════════════════════════════════════════════════════════════ */}
         <div className="w-full lg:w-96 flex flex-col gap-4">
 
+          {/* ── Arm status banner ────────────────────────────────────────── */}
+          {motorsArmed ? (
+            <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-green-400" />
+                <div>
+                  <p className="text-sm font-bold text-green-400">Motors Armed</p>
+                  <p className="text-xs text-green-400/70">Ready for operation</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setMotorsArmed(false)}
+                className="bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 border border-red-500/30"
+              >
+                <ShieldOff className="w-3.5 h-3.5" />
+                Disarm
+              </button>
+            </div>
+          ) : (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <ShieldOff className="w-4 h-4 text-red-400" />
+                <div>
+                  <p className="text-sm font-bold text-red-400">Motors Disarmed</p>
+                  <p className="text-xs text-red-400/70">Arm motors before operation</p>
+                </div>
+              </div>
+              <span className="text-xs text-gray-400">Use ARM button in header</span>
+            </div>
+          )}
+
           {/* ── Card 1: Directional D-pad Controls ──────────────────────── */}
           <div className={cardClass}>
             <h2 className={`${titleClass} mb-4`}>Movement Controls</h2>
 
-            {/* Mode warning — shown when keyboard controls are inactive */}
             {!isManual && (
-              <p className="text-xs text-yellow-400 text-center mb-3">
+              <p className="text-xs text-amber-400 text-center mb-3">
                 Switch to Manual mode to use keyboard controls
               </p>
             )}
 
-            {/* D-pad — 3 × 3 CSS grid */}
+            {/* D-pad — 3 × 3 CSS grid; center cell is intentionally empty */}
             <div className="grid grid-cols-3 gap-2 w-48 mx-auto">
-
               {/* Row 1 — Forward */}
               <div />
               <button
                 className={dirBtnClass('ArrowUp')}
-                onClick={() => isManual && sendCommand('forward', speed)}
+                onMouseDown={() => isManual && motorsArmed && sendCommand('forward', speed)}
+                onMouseUp={() => isManual && sendCommand('stop', 0)}
+                onMouseLeave={() => isManual && sendCommand('stop', 0)}
                 aria-label="Forward"
               >
                 <ArrowUp className="w-6 h-6" />
               </button>
               <div />
 
-              {/* Row 2 — Left · Stop · Right */}
+              {/* Row 2 — Left · [empty] · Right */}
               <button
                 className={dirBtnClass('ArrowLeft')}
-                onClick={() => isManual && sendCommand('turn_left', speed)}
+                onMouseDown={() => isManual && motorsArmed && sendCommand('turn_left', speed, -45)}
+                onMouseUp={() => isManual && sendCommand('stop', 0)}
+                onMouseLeave={() => isManual && sendCommand('stop', 0)}
                 aria-label="Turn Left"
               >
                 <ArrowLeft className="w-6 h-6" />
               </button>
-
-              {/* Stop (centre) */}
-              <button
-                className={[
-                  'w-14 h-14 rounded-xl flex items-center justify-center',
-                  'transition-all duration-100 text-xs font-bold',
-                  activeKey === 'Space'
-                    ? 'bg-red-400 scale-95 text-white'
-                    : 'bg-red-600 hover:bg-red-500 text-white',
-                ].join(' ')}
-                onClick={() => sendCommand('stop', 0)}
-                aria-label="Stop"
-              >
-                <Square className="w-5 h-5" />
-              </button>
-
+              <div />
               <button
                 className={dirBtnClass('ArrowRight')}
-                onClick={() => isManual && sendCommand('turn_right', speed)}
+                onMouseDown={() => isManual && motorsArmed && sendCommand('turn_right', speed, 45)}
+                onMouseUp={() => isManual && sendCommand('stop', 0)}
+                onMouseLeave={() => isManual && sendCommand('stop', 0)}
                 aria-label="Turn Right"
               >
                 <ArrowRight className="w-6 h-6" />
@@ -222,7 +271,9 @@ export default function ManualControl() {
               <div />
               <button
                 className={dirBtnClass('ArrowDown')}
-                onClick={() => isManual && sendCommand('backward', speed)}
+                onMouseDown={() => isManual && motorsArmed && sendCommand('backward', speed)}
+                onMouseUp={() => isManual && sendCommand('stop', 0)}
+                onMouseLeave={() => isManual && sendCommand('stop', 0)}
                 aria-label="Backward"
               >
                 <ArrowDown className="w-6 h-6" />
@@ -230,9 +281,32 @@ export default function ManualControl() {
               <div />
             </div>
 
-            {/* Keyboard hint */}
+            {/* Stop motors button — below the D-pad, clearly separated */}
+            <div className="mt-5">
+              <button
+                onClick={() => sendCommand('stop', 0)}
+                className={[
+                  'flex items-center justify-center gap-2 w-full py-3',
+                  'rounded-full font-bold text-sm text-white',
+                  'bg-red-600 hover:bg-red-500 transition-all duration-100 active:scale-95',
+                  activeKey === 'Space' ? 'bg-red-400 scale-95' : '',
+                ].join(' ')}
+                aria-label="Stop motors"
+              >
+                <StopCircle className="w-5 h-5" />
+                Stop motors
+              </button>
+            </div>
+
+            {!motorsArmed && (
+              <p className="text-xs text-red-400 text-center mt-2 flex items-center justify-center gap-1">
+                <ShieldOff className="w-3 h-3" />
+                Arm motors to enable controls
+              </p>
+            )}
+
             <p className="text-xs text-gray-500 text-center mt-3">
-              Use arrow keys to control • Space to stop
+              Use arrow keys to navigate · Space to stop
             </p>
           </div>
 
@@ -240,12 +314,14 @@ export default function ManualControl() {
           <div className={cardClass}>
             <h2 className={`${titleClass} mb-3`}>Motor Speed (PWM)</h2>
 
-            {/* Speed value display */}
-            <div className="text-center mb-4">
+            {/* Dual display — PWM value + percentage */}
+            <div className="flex items-baseline justify-center gap-2 mb-4">
               <span className="text-3xl font-bold text-blue-400">{speed}</span>
-              <p className="text-xs text-gray-400 mt-1">
-                {Math.round((speed / 255) * 100)}% power
-              </p>
+              <span className="text-sm text-gray-400">PWM</span>
+              <span className="text-gray-600 text-sm">·</span>
+              <span className="text-xl font-semibold text-blue-300">
+                {Math.round((speed / 255) * 100)}%
+              </span>
             </div>
 
             {/* Speed slider */}
@@ -259,21 +335,30 @@ export default function ManualControl() {
               className="w-full accent-blue-500 cursor-pointer"
             />
 
-            {/* Speed preset buttons */}
+            {/* Snap presets: 33% / 66% / 100% */}
             <div className="flex gap-2 mt-3 justify-center">
               {[
-                { label: 'Slow',   value: 80  },
-                { label: 'Normal', value: 180 },
+                { label: 'Slow',   value: Math.round(255 * 0.33) },
+                { label: 'Normal', value: Math.round(255 * 0.66) },
                 { label: 'Fast',   value: 255 },
-              ].map(({ label, value }) => (
-                <button
-                  key={label}
-                  onClick={() => setSpeed(value)}
-                  className="text-xs px-3 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-                >
-                  {label}
-                </button>
-              ))}
+              ].map(({ label, value }) => {
+                const pct = Math.round((value / 255) * 100)
+                const isSnapped = speed === value
+                return (
+                  <button
+                    key={label}
+                    onClick={() => setSpeed(value)}
+                    className={[
+                      'text-xs px-3 py-1 rounded-lg transition-colors',
+                      isSnapped
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300',
+                    ].join(' ')}
+                  >
+                    {label} <span className="opacity-60">{pct}%</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -281,7 +366,6 @@ export default function ManualControl() {
           <div className={cardClass}>
             <h2 className={`${titleClass} mb-3`}>Rudder Angle</h2>
 
-            {/* Rudder value display */}
             <div className="text-center mb-4">
               <span className={`text-3xl font-bold ${rudderColor}`}>
                 {rudderAngle}°
@@ -289,7 +373,7 @@ export default function ManualControl() {
               <p className="text-xs text-gray-400 mt-1">{rudderLabel}</p>
             </div>
 
-            {/* Visual rudder indicator — rotates with the angle */}
+            {/* Visual rudder indicator */}
             <div className="flex justify-center items-center h-6 mb-4">
               <div
                 className="w-16 h-1 bg-blue-500 rounded"
@@ -297,7 +381,6 @@ export default function ManualControl() {
               />
             </div>
 
-            {/* Rudder slider */}
             <input
               type="range"
               min={-90}
@@ -312,14 +395,12 @@ export default function ManualControl() {
               className="w-full accent-blue-500 cursor-pointer"
             />
 
-            {/* Slider end labels */}
             <div className="flex justify-between mt-1">
               <span className="text-xs text-gray-500">-90° Left</span>
               <span className="text-xs text-gray-500">0°</span>
               <span className="text-xs text-gray-500">Right 90°</span>
             </div>
 
-            {/* Reset to centre button */}
             <div className="flex justify-center mt-3">
               <button
                 onClick={() => {
@@ -334,26 +415,21 @@ export default function ManualControl() {
           </div>
 
         </div>
+
         {/* ══════════════════════════════════════════════════════════════════
             RIGHT COLUMN — System Controls
         ══════════════════════════════════════════════════════════════════ */}
         <div className="flex-1 flex flex-col gap-4">
 
-          {/* ── Card 1: Mode Switcher ────────────────────────────────────── */}
+          {/* ── Card 1: Mode Selector ────────────────────────────────────── */}
           <div className={cardClass}>
             <h2 className={`${titleClass} mb-3`}>Device Mode</h2>
 
-            {/* Current mode badge */}
-            <div className={`px-4 py-2 rounded-full text-sm font-bold text-center mb-3 capitalize ${modeBadgeClass(currentMode)}`}>
-              {currentMode ?? 'unknown'}
-            </div>
-
-            {/* Mode change success flash */}
             {modeSuccess && (
               <p className="text-xs text-green-400 text-center mb-2">Mode changed!</p>
             )}
 
-            {/* Mode buttons grid */}
+            {/* 4-button mode grid — amber when active */}
             <div className="grid grid-cols-2 gap-2">
               {[
                 { label: 'Manual',    value: 'manual'    },
@@ -370,8 +446,8 @@ export default function ManualControl() {
                     className={[
                       'text-xs font-medium py-2 px-3 rounded-lg transition-colors duration-150 flex items-center justify-center gap-1',
                       isActive
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300',
+                        ? 'bg-amber-500/20 border border-amber-500/50 text-amber-400'
+                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300',
                     ].join(' ')}
                   >
                     {modeLoading && isActive && (
@@ -383,71 +459,80 @@ export default function ManualControl() {
               })}
             </div>
 
-            {/* FIX 2 - Mode sync warning */}
+            {/* Device-reported mode status line */}
             {(() => {
-              const backendMode = currentMode
               const esp32Mode = deviceStatus?.esp32_mode
+              const mismatch = esp32Mode != null && currentMode !== esp32Mode
               return (
-                <>
-                  {/* Info note */}
-                  <div className="border-t border-gray-700/50 mt-3 pt-3 flex items-start gap-2 text-xs text-gray-500">
-                    <Info className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
-                    <span>
-                      Mode is set from this dashboard. Device reports its current mode separately.
+                <div className="mt-3 pt-3 border-t border-gray-700/50">
+                  <p className="text-xs text-gray-400">
+                    Device reports:{' '}
+                    <span className={`font-medium capitalize ${mismatch ? 'text-amber-400' : 'text-gray-200'}`}>
+                      {esp32Mode ?? '--'}
                     </span>
-                  </div>
-
-                  {/* Sync mismatch warning */}
-                  {esp32Mode != null && backendMode !== esp32Mode && (
-                    <div className="flex items-center gap-2 text-xs text-yellow-400 bg-yellow-500/10 rounded-lg px-3 py-2 border border-yellow-500/20 mt-2">
-                      <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
-                      <span>Device is still in <strong>{esp32Mode}</strong> mode. Waiting for sync...</span>
-                    </div>
-                  )}
-                </>
+                    {mismatch && (
+                      <span className="ml-1.5 text-amber-400/70">(waiting for sync)</span>
+                    )}
+                  </p>
+                </div>
               )
             })()}
           </div>
 
           {/* ── Card 2: Pump Control ─────────────────────────────────────── */}
-          <div className={cardClass}>
-            <h2 className={`${titleClass} mb-3`}>Pump Control</h2>
+          <div className={[
+            'rounded-xl shadow-lg p-5 border transition-colors duration-500',
+            pumpRunning
+              ? 'bg-gray-800 border-green-500/60'
+              : 'bg-gray-800 border-gray-700',
+          ].join(' ')}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className={titleClass}>Pump Control</h2>
+              {pumpRunning && (
+                <span className="inline-flex items-center gap-1.5 bg-green-500/20 text-green-400 text-xs font-medium px-2 py-0.5 rounded-full">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                  Running
+                </span>
+              )}
+            </div>
 
-            {/* Pump status indicator */}
-            {deviceStatus?.pump_status ? (
-              <div className="bg-blue-500/20 rounded-xl p-4">
-                <Waves className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-                <p className="text-blue-400 font-bold text-center">RUNNING</p>
+            {/* Pump visual indicator */}
+            {pumpRunning ? (
+              <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+                <Waves className="w-8 h-8 text-green-400 mx-auto mb-2 animate-wave" />
+                <p className="text-green-400 font-bold text-center text-sm">RUNNING</p>
+                <p className="text-green-400/70 text-xs text-center mt-1">
+                  Running · {pumpRunTime}
+                </p>
               </div>
             ) : (
               <div className="bg-gray-700/30 rounded-xl p-4">
                 <Waves className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                <p className="text-gray-500 font-bold text-center">IDLE</p>
+                <p className="text-gray-500 font-bold text-center text-sm">IDLE</p>
               </div>
             )}
 
-            {/* FIX 1 - Pump blocked message */}
+            {/* Pump control button or blocked message */}
             {(() => {
               const isPumpControllable = currentMode === 'manual'
 
               if (!isPumpControllable) {
-                const pumpBlockedMsg = {
+                const msg = {
                   automatic: 'Pump activates automatically when oil is detected',
                   standby:   'Switch to Manual mode to control the pump',
-                  returning: 'Pump is disabled while device is returning home',
+                  returning: 'Pump disabled while returning home',
                   cleaning:  'Pump is controlled automatically during cleaning',
                 }[currentMode] ?? 'Switch to Manual mode to control the pump'
 
                 return (
-                  <div className="flex items-center gap-2 text-xs text-yellow-400 bg-yellow-500/10 rounded-lg px-3 py-2 border border-yellow-500/20 w-full justify-center mt-3">
-                    <Info className="w-4 h-4 shrink-0" />
-                    <span>{pumpBlockedMsg}</span>
+                  <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2 border border-amber-500/20 mt-3 justify-center">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{msg}</span>
                   </div>
                 )
               }
 
-              // Pump is controllable — show the normal toggle button
-              return deviceStatus?.pump_status ? (
+              return pumpRunning ? (
                 <button
                   onClick={() => sendCommand('pump_off', 0)}
                   disabled={cmdLoading}
@@ -455,26 +540,23 @@ export default function ManualControl() {
                 >
                   {cmdLoading
                     ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Square className="w-4 h-4" />
-                  }
+                    : <Square className="w-4 h-4" />}
                   Turn Pump Off
                 </button>
               ) : (
                 <button
                   onClick={() => sendCommand('pump_on', 200)}
                   disabled={cmdLoading}
-                  className="py-2 px-4 rounded-lg text-sm font-medium flex items-center justify-center gap-2 w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                  className="py-2 px-4 rounded-lg text-sm font-medium flex items-center justify-center gap-2 w-full mt-3 bg-green-600 hover:bg-green-700 text-white transition-colors"
                 >
                   {cmdLoading
                     ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Play className="w-4 h-4" />
-                  }
+                    : <Play className="w-4 h-4" />}
                   Turn Pump On
                 </button>
               )
             })()}
 
-            {/* Pump note */}
             <p className="text-xs text-gray-500 text-center mt-2">
               Pump extracts oil from water surface
             </p>
@@ -484,48 +566,62 @@ export default function ManualControl() {
           <div className={cardClass}>
             <h2 className={`${titleClass} mb-3`}>Current Status</h2>
 
-            <div className="flex flex-col">
+            <div className="flex flex-col gap-0.5">
               {[
                 {
                   label: 'Last Command',
                   value: deviceStatus?.current_command ?? '--',
+                  isCounter: false,
                 },
                 {
                   label: 'ESP32 Command',
                   value: deviceStatus?.esp32_command ?? '--',
+                  isCounter: false,
                 },
                 {
                   label: 'Current Mode',
                   value: deviceStatus?.current_mode ?? '--',
+                  isCounter: false,
                 },
                 {
                   label: 'Rudder Angle',
                   value: deviceStatus?.esp32_rudder_angle != null
                     ? deviceStatus.esp32_rudder_angle + '°'
                     : '--',
+                  isCounter: false,
                 },
                 {
                   label: 'Heading',
                   value: deviceStatus?.heading != null
                     ? deviceStatus.heading + '°'
                     : '--',
+                  isCounter: false,
                 },
                 {
                   label: 'Time Since Update',
-                  value: deviceStatus?.time_since_last_update != null
-                    ? deviceStatus.time_since_last_update.toFixed(1) + 's ago'
-                    : '--',
+                  value: liveSinceUpdate,
+                  isCounter: true,
                 },
-              ].map(({ label, value }, i, arr) => (
+              ].map(({ label, value, isCounter }, i, arr) => (
                 <div
                   key={label}
                   className={[
-                    'flex justify-between items-center py-1.5',
-                    i < arr.length - 1 ? 'border-b border-gray-700/50' : '',
+                    'flex items-center gap-2 py-2',
+                    i < arr.length - 1 ? 'border-b border-gray-700/40' : '',
                   ].join(' ')}
                 >
-                  <span className="text-xs text-gray-400">{label}</span>
-                  <span className="text-sm font-mono font-medium text-gray-800 dark:text-gray-200">
+                  <span className="text-xs text-gray-400 shrink-0">{label}</span>
+                  {/* Dot leader spacer */}
+                  <span
+                    className="flex-1 border-b border-dotted border-gray-600"
+                    style={{ marginBottom: '2px' }}
+                  />
+                  <span className={[
+                    'text-sm font-mono font-medium shrink-0',
+                    isCounter
+                      ? 'text-gray-400'
+                      : isStale ? 'text-amber-400' : 'text-gray-200',
+                  ].join(' ')}>
                     {value}
                   </span>
                 </div>
@@ -533,38 +629,7 @@ export default function ManualControl() {
             </div>
           </div>
 
-          {/* ── Card 4: Emergency Stop ───────────────────────────────────── */}
-          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl shadow-lg p-5">
-            <h2 className="text-sm font-semibold text-red-400 mb-2">Emergency Stop</h2>
-
-            <p className="text-xs text-gray-400 mb-3">
-              Immediately stops all motors and pump.
-              Use in case of emergency or unexpected behavior.
-            </p>
-
-            {/* Emergency stop button */}
-            <button
-              onClick={handleEmergencyStop}
-              className={[
-                'py-3 px-4 rounded-xl flex items-center justify-center gap-2 w-full',
-                'font-bold text-base text-white transition-all duration-100 active:scale-95',
-                stopped
-                  ? 'bg-red-400'
-                  : 'bg-red-600 hover:bg-red-500 active:bg-red-700',
-              ].join(' ')}
-            >
-              <AlertOctagon className="w-5 h-5" />
-              {stopped ? 'STOPPED' : 'EMERGENCY STOP'}
-            </button>
-
-            {/* Warning text */}
-            <p className="text-xs text-red-400/70 text-center mt-2">
-              ⚠ This will halt all device operations
-            </p>
-          </div>
-
         </div>
-
       </div>
     </div>
   )

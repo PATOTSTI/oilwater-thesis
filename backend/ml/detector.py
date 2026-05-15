@@ -21,7 +21,7 @@ def load_model(model_path: str = "ml/best.pt") -> YOLO:
 
     Args:
         model_path: Path to the trained .pt weights file.
-                    Defaults to "ml/best.pt" relative to the project root.
+                    Defaults to "ml/best_mAP50-75.93%_mAP50-95-54.88%.pt" relative to the project root.
 
     Returns:
         A loaded `ultralytics.YOLO` instance ready for inference.
@@ -34,7 +34,7 @@ def load_model(model_path: str = "ml/best.pt") -> YOLO:
     if not path.exists():
         raise FileNotFoundError(
             f"YOLOv8 model weights not found at '{path.resolve()}'.\n"
-            "Please place your trained 'best.pt' file inside the 'ml/' folder."
+            "Please place your trained 'best_mAP50-75.93%_mAP50-95-54.88%.pt' file inside the 'ml/' folder."
         )
 
     print(f"[DETECTOR] Loading YOLOv8 model from: {path.resolve()}")
@@ -46,7 +46,7 @@ def load_model(model_path: str = "ml/best.pt") -> YOLO:
 def run_inference(
     model: YOLO,
     image: Image.Image,
-    confidence_threshold: float = 0.60,
+    confidence_threshold: float = 0.355,
 ) -> list[dict]:
     """
     Run YOLOv8 inference on a PIL image and return structured detections.
@@ -54,8 +54,9 @@ def run_inference(
     Args:
         model:                A loaded YOLO instance (from `load_model`).
         image:                A PIL Image object (any mode; converted to RGB internally).
-        confidence_threshold: Minimum confidence score to keep a detection (default 0.60).
-                              Detections below this value are silently discarded.
+        confidence_threshold: Minimum confidence score to keep a detection (default 0.355,
+                              the V6 F1-peak threshold). Detections below this value are
+                              silently discarded.
 
     Returns:
         A list of detection dicts for every detection that passes the threshold:
@@ -76,7 +77,7 @@ def run_inference(
     img_width, img_height = image.size
 
     # Run inference — `verbose=False` silences per-frame YOLO console output
-    results = model(image, verbose=False)
+    results = model(image, conf=confidence_threshold, verbose=False)
 
     detections: list[dict] = []
 

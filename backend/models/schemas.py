@@ -32,6 +32,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -194,24 +195,24 @@ class CommandRequest(BaseModel):
 class CommandResponse(BaseModel):
     """Response for GET /command and POST /command — ESP32 reads this on every poll.
 
-    UPDATED: Added speed and angle so the ESP32 knows the full hardware parameters
-             to apply, not just the command string.
+    UPDATED: Added speed, angle, pump, and armed fields so the ESP32 knows
+             the full hardware parameters to apply, not just the command string.
     """
     command: str = Field(
         ...,
         description="Current movement command for the ESP32 to execute.",
         examples=["forward"],
     )
-    # UPDATED: Echoes the stored PWM speed so ESP32 can apply it to the BTS7960 drivers
+    # Echoes the stored PWM speed so ESP32 can apply it to the BTS7960 drivers
     speed: Optional[int] = Field(
         default=None,
         description=(
-            "PWM speed value to apply to the BTS7960 motor drivers (0–255). "
+            "PWM speed value to apply to the BTS7960 motor drivers (0-255). "
             "Present for movement commands; null for pump/system/rudder commands."
         ),
         examples=[200],
     )
-    # UPDATED: Echoes the stored rudder angle so ESP32 can position the servos
+    # Echoes the stored rudder angle so ESP32 can position the servo
     angle: Optional[int] = Field(
         default=None,
         description=(
@@ -219,6 +220,47 @@ class CommandResponse(BaseModel):
             "Present for set_rudder commands; null for all other commands."
         ),
         examples=[0],
+    )
+    # Pump state so ESP32 knows whether to activate relay
+    pump: Optional[bool] = Field(
+        default=False,
+        description=(
+            "True if the water pump relay should be active. "
+            "ESP32 reads this to control GPIO 18 relay pin."
+        ),
+        examples=[False],
+    )
+    # Armed state so ESP32 knows whether to execute motor commands
+    armed: Optional[bool] = Field(
+        default=False,
+        description=(
+            "True if motors are armed and ready to receive movement commands. "
+            "When False ESP32 blocks all motor commands except stop "
+            "and emergency_stop. Pump still works regardless of armed state."
+        ),
+        examples=[False],
+    )
+
+
+# ===========================================================================
+# /arm  (routes/commands.py)
+# ===========================================================================
+
+class ArmRequest(BaseModel):
+    """Body for POST /arm — frontend arms or disarms the motors.
+
+    The ESP32 firmware blocks every movement command (forward, backward,
+    turn_*, forward_*, set_rudder) until it sees `armed: true` from
+    GET /command. This endpoint is the only way that flag flips.
+    """
+    armed: bool = Field(
+        ...,
+        description=(
+            "True to arm the motors and allow movement commands. "
+            "False to disarm — ESP32 will immediately stop and reject "
+            "all movement commands except stop and emergency_stop."
+        ),
+        examples=[True],
     )
 
 
@@ -633,8 +675,8 @@ class OilDetection(BaseModel):
     bbox: BBox = Field(..., description="Bounding box of the detection in pixel coordinates.")
     center_pixel: CenterPixel = Field(..., description="Centre pixel of the bounding box.")
     confidence: float = Field(
-        ..., ge=0.40, le=1.0,
-        description="YOLOv8 confidence score (0.60–1.0; detections below 60% are filtered out).",
+        ..., ge=0.0, le=1.0,
+        description="YOLOv8 confidence score (0.0–1.0); detections below CONFIDENCE_THRESHOLD are filtered before reaching this model.",
     )
     class_name: str = Field(..., description="Detected class label (e.g. 'oil').")
     estimated_gps: GPSCoords = Field(
@@ -718,6 +760,72 @@ class DetectionListResponse(BaseModel):
     returned: int = Field(..., ge=0, description="Number of detections in this page.")
     offset: int = Field(..., ge=0, description="Offset used for this page.")
     limit: int = Field(..., ge=1, description="Page size limit used for this page.")
+
+
+# ---------------------------------------------------------------------------
+# Batch screening  (POST /detect/screen-batch)
+# ---------------------------------------------------------------------------
+
+class ScreeningStatus(str, Enum):
+    """Classification result for a single screened drone image."""
+    with_oil    = "with_oil"
+    without_oil = "without_oil"
+    uncertain   = "uncertain"
+
+
+class ScreenedImage(BaseModel):
+    """Result for one image processed by POST /detect/screen-batch."""
+    filename: str = Field(
+        ...,
+        description="Original filename as uploaded by the client.",
+    )
+    status: ScreeningStatus = Field(
+        ...,
+        description=(
+            "Classification result: "
+            "'with_oil' (best confidence ≥ 0.60), "
+            "'uncertain' (0.35 ≤ best confidence < 0.60), "
+            "'without_oil' (no detection above 0.35)."
+        ),
+    )
+    best_confidence: float = Field(
+        ..., ge=0.0, le=1.0,
+        description="Highest YOLOv8 confidence score found in this image (0 if no detections).",
+    )
+    total_detections: int = Field(
+        ..., ge=0,
+        description="Number of detections that passed the minimum screening threshold (0.35).",
+    )
+    image_width: int = Field(..., ge=1, description="Width of the image in pixels.")
+    image_height: int = Field(..., ge=1, description="Height of the image in pixels.")
+
+
+class BatchScreeningResponse(BaseModel):
+    """Response for POST /detect/screen-batch."""
+    total_images: int = Field(
+        ..., ge=0,
+        description="Total number of images submitted for screening.",
+    )
+    with_oil_count: int = Field(
+        ..., ge=0,
+        description="Number of images classified as 'with_oil'.",
+    )
+    without_oil_count: int = Field(
+        ..., ge=0,
+        description="Number of images classified as 'without_oil'.",
+    )
+    uncertain_count: int = Field(
+        ..., ge=0,
+        description="Number of images classified as 'uncertain'.",
+    )
+    results: list[ScreenedImage] = Field(
+        default_factory=list,
+        description="Per-image screening results, in the same order as the uploaded files.",
+    )
+    screened_at: datetime = Field(
+        ...,
+        description="UTC datetime when the batch screening was performed.",
+    )
 
 
 # ===========================================================================
@@ -888,7 +996,7 @@ class PowerRails(BaseModel):
     TODO (future): When voltage-sense resistors or digital monitoring is added
     to the ESP32, set these to the real measured values instead of defaulting to True.
     """
-    # UPDATED: 12V rail powers the double BTS7960 43A motor drivers and extraction pump
+    # 12V rail powers the double BTS7960 43A motor drivers and extraction pump
     motors_12v: Optional[bool] = Field(
         default=True,
         description=(
@@ -896,7 +1004,7 @@ class PowerRails(BaseModel):
             "Defaults to True until hardware rail monitoring is implemented."
         ),
     )
-    # UPDATED: 5V rail powers the ESP32 microcontroller
+    # 5V rail powers the ESP32 microcontroller
     logic_5v: Optional[bool] = Field(
         default=True,
         description=(
@@ -904,7 +1012,7 @@ class PowerRails(BaseModel):
             "Defaults to True until hardware rail monitoring is implemented."
         ),
     )
-    # UPDATED: 3.3V rail powers the ICM-20948 IMU and NEO-M8N GPS sensor
+    # 3.3V rail powers the ICM-20948 IMU and NEO-M8N GPS sensor
     sensors_3v3: Optional[bool] = Field(
         default=True,
         description=(
@@ -912,11 +1020,11 @@ class PowerRails(BaseModel):
             "Defaults to True until hardware rail monitoring is implemented."
         ),
     )
-    # UPDATED: Servo rail powers the two S020A-180 waterproof rudder servos
+    # Servo rail powers the S020A-180 waterproof rudder servo
     servos_rail: Optional[bool] = Field(
         default=True,
         description=(
-            "True if the servo rail is active (powers S020A-180 rudder servos). "
+            "True if the servo rail is active (powers S020A-180 rudder servo). "
             "Defaults to True until hardware rail monitoring is implemented."
         ),
     )

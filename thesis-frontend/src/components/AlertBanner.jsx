@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BatteryLow, WifiOff, Droplets, Waves, X } from 'lucide-react'
+import { BatteryLow, WifiOff, Droplets, Waves, AlertTriangle, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 // ── Reappear intervals (ms); null = stays dismissed until condition resets ──────
@@ -11,8 +11,15 @@ const REAPPEAR_INTERVALS = {
 }
 
 export default function AlertBanner() {
-  const { lowBatteryWarning, isDeviceOnline, oilDetected, currentMode } = useApp()
+  const { lowBatteryWarning, isDeviceOnline, oilDetected, currentMode, dataUpdatedAt } = useApp()
   const [dismissedAt, setDismissedAt] = useState({})
+  const [now, setNow] = useState(Date.now())
+
+  // Tick every second so the "no data" counter stays live
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   // ── Dismiss handler ─────────────────────────────────────────────────────────
   const handleDismiss = (alertId) => {
@@ -50,6 +57,10 @@ export default function AlertBanner() {
       setDismissedAt(prev => { const u = { ...prev }; delete u.cleaning_active; return u })
   }, [currentMode])
 
+  // ── No-data warning — triggers when no successful poll for > 5 s ────────────
+  const secsSinceData = dataUpdatedAt ? Math.floor((now - dataUpdatedAt) / 1000) : null
+  const showNoDataBanner = secsSinceData != null && secsSinceData >= 5
+
   // ── Alert definitions ────────────────────────────────────────────────────────
   const ALERTS = [
     {
@@ -83,10 +94,20 @@ export default function AlertBanner() {
   ]
 
   const active = ALERTS.filter(({ id, condition }) => shouldShow(id, condition))
-  if (active.length === 0) return null
+  if (active.length === 0 && !showNoDataBanner) return null
 
   return (
     <div className="transition-all duration-300 ease-in-out">
+      {/* No-data warning — live counter, not dismissable */}
+      {showNoDataBanner && (
+        <div className="flex items-center border-l-4 px-6 py-2 bg-amber-500/20 border-amber-500 text-amber-400">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          <span className="ml-3 flex-1 text-sm font-medium">
+            ⚠ No data received for {secsSinceData}s — device may be unreachable
+          </span>
+        </div>
+      )}
+
       {active.map(({ id, icon: Icon, message, cls }) => (
         <div
           key={id}
