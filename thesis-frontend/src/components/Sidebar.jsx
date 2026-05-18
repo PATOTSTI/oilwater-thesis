@@ -6,8 +6,6 @@ import {
   ScanSearch,
   Images,
   Waves,
-  Battery,
-  Activity,
   ScrollText,
 } from 'lucide-react'
 
@@ -18,8 +16,6 @@ const NAV_LINKS = [
   { label: 'Oil Detection',  path: '/detection',  icon: ScanSearch },
   { label: 'Batch Screening',path: '/screening',  icon: Images },
   { label: 'Cleaning',       path: '/cleaning',   icon: Waves },
-  { label: 'Battery',        path: '/battery',    icon: Battery },
-  { label: 'Sensors',        path: '/sensors',    icon: Activity },
   { label: 'Logs',           path: '/logs',       icon: ScrollText },
 ]
 

@@ -16,7 +16,6 @@
 import { useState, useEffect } from 'react'
 import {
   ArrowUp,
-  ArrowDown,
   ArrowLeft,
   ArrowRight,
   StopCircle,
@@ -106,7 +105,7 @@ export default function ManualControl() {
 
   // ── Keyboard support ──────────────────────────────────────────────────────
   useEffect(() => {
-    const ARROW_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ']
+    const ARROW_KEYS = ['ArrowUp', 'ArrowLeft', 'ArrowRight', ' ']
 
     const handleKeyDown = (e) => {
       if (!ARROW_KEYS.includes(e.key)) return
@@ -124,7 +123,6 @@ export default function ManualControl() {
 
       switch (e.key) {
         case 'ArrowUp':    sendCommand('forward',    speed);       break
-        case 'ArrowDown':  sendCommand('backward',   speed);       break
         case 'ArrowLeft':  sendCommand('turn_left',  speed, -45);  break
         case 'ArrowRight': sendCommand('turn_right', speed,  45);  break
       }
@@ -267,18 +265,7 @@ export default function ManualControl() {
                 <ArrowRight className="w-6 h-6" />
               </button>
 
-              {/* Row 3 — Backward */}
-              <div />
-              <button
-                className={dirBtnClass('ArrowDown')}
-                onMouseDown={() => isManual && motorsArmed && sendCommand('backward', speed)}
-                onMouseUp={() => isManual && sendCommand('stop', 0)}
-                onMouseLeave={() => isManual && sendCommand('stop', 0)}
-                aria-label="Backward"
-              >
-                <ArrowDown className="w-6 h-6" />
-              </button>
-              <div />
+              <div /><div /><div />
             </div>
 
             {/* Stop motors button — below the D-pad, clearly separated */}

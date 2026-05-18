@@ -119,6 +119,7 @@ def get_command():
             cleaning["active"] = False
             app_state["current_mode"] = "standby"
             app_state["current_command"] = "stop"
+            app_state["pump_status"] = False
             log_event(
                 "cleaning",
                 "Cleaning pattern complete — all waypoints reached.",
@@ -166,6 +167,7 @@ def get_command():
                 cleaning["active"] = False
                 app_state["current_mode"] = "standby"
                 app_state["current_command"] = "stop"
+                app_state["pump_status"] = False
                 log_event(
                     "cleaning",
                     "Cleaning pattern complete — all waypoints reached.",

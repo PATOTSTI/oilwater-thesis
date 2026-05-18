@@ -136,10 +136,11 @@ def start_cleaning(body: CleaningStartRequest):
     cleaning["total_waypoints"] = total
     cleaning["current_radius"] = waypoints[0]["radius"]  # first ring radius
 
-    # ---- Switch to cleaning mode ----
+    # ---- Switch to cleaning mode and activate the pump ----
     # Disable the regular navigation target — cleaning feeds its own waypoints
     app_state["current_mode"] = "cleaning"
     app_state["target_set"] = False
+    app_state["pump_status"] = True
 
     # ---- Pre-load the first command, rudder angle, and speed ----
     first_wp = waypoints[0]
@@ -238,9 +239,10 @@ def stop_cleaning():
     cleaning["total_waypoints"] = 0
     cleaning["current_radius"] = 0.0
 
-    # ---- Return to standby ----
+    # ---- Return to standby and deactivate the pump ----
     app_state["current_mode"] = "standby"
     app_state["current_command"] = "stop"
+    app_state["pump_status"] = False
 
     log_event(
         "cleaning",
