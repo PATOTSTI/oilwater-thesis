@@ -102,8 +102,17 @@ class AppState:
         # --- Oil detection (capacitive sensor) ---
         self.oil_detected: bool = False
 
-        # --- Pump state (confirmed by ESP32) ---
+        # --- Pump state ---
+        # pump_status: commanded by POST /command (backend source of truth for the UI)
+        # esp32_pump_status: what the ESP32 hardware actually reports via POST /status
         self.pump_status: bool = False
+        self.esp32_pump_status: bool = False
+
+        # --- Arm state ---
+        # Set by POST /arm from the frontend when the operator arms/disarms motors.
+        # Included in GET /command response so the ESP32 firmware can enforce the
+        # same safety interlock on the hardware side.
+        self.motors_armed: bool = False
 
         # --- Power system ---
         self.battery_level: int = 100           # integer percentage 0–100

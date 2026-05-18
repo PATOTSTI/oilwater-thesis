@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { Battery, Zap, AlertOctagon, Loader2, Shield, ShieldOff, AlertTriangle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useCommand } from '../hooks/useCommand'
+import { armMotors } from '../api/endpoints'
 
 const ROUTE_TITLES = {
   '/':          'Dashboard',
@@ -136,7 +137,10 @@ export default function StatusBar() {
         {motorsArmed ? (
           <button
             type="button"
-            onClick={() => setMotorsArmed(false)}
+            onClick={() => {
+              setMotorsArmed(false)
+              armMotors(false).catch(console.error)
+            }}
             className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full transition-all duration-200 cursor-pointer bg-green-500/20 border border-green-500/50 text-green-400 hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-400"
           >
             <Shield className="w-3.5 h-3.5" />
@@ -206,7 +210,14 @@ export default function StatusBar() {
             <button
               type="button"
               disabled={!armChecked}
-              onClick={() => { if (armChecked) { setMotorsArmed(true); setShowArmConfirm(false); setArmChecked(false) } }}
+              onClick={() => {
+                if (armChecked) {
+                  setMotorsArmed(true)
+                  setShowArmConfirm(false)
+                  setArmChecked(false)
+                  armMotors(true).catch(console.error)
+                }
+              }}
               className={[
                 'flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-colors duration-150',
                 'flex items-center justify-center gap-1.5',

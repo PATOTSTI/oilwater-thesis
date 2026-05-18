@@ -45,6 +45,13 @@ export const setCommand = async (command, speed = 200, angle = null) =>
     })
   )
 
+/**
+ * Arm or disarm the motor drivers.
+ * @param {boolean} armed - true to arm, false to disarm
+ */
+export const armMotors = async (armed) =>
+  unwrap(await apiClient.post('/arm', { armed }))
+
 // ─── MODE ─────────────────────────────────────────────────────────────────────
 
 /**

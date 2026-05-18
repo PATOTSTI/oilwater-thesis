@@ -103,7 +103,10 @@ def update_status(body: StatusUpdate):
 
     # ---- Store sensor readings ----
     app_state["oil_detected"] = body.oil_detected
-    app_state["pump_status"] = body.pump_status
+    # pump_status is managed by POST /command (pump_on / pump_off).
+    # Storing the ESP32's hardware report separately avoids overwriting the
+    # backend's commanded state every time the ESP32 sends a status update.
+    app_state["esp32_pump_status"] = body.pump_status
 
     # Log warning when oil is newly detected
     if body.oil_detected and not app_state.get(
@@ -149,9 +152,11 @@ def update_status(body: StatusUpdate):
 
     print(
         f"[POST /status] lat={body.lat}, lng={body.lng}, "
-        f"heading={body.heading}°, oil={body.oil_detected}, pump={body.pump_status}, "
+        f"heading={body.heading}°, oil={body.oil_detected}, "
+        f"pump(cmd)={app_state['pump_status']} pump(hw)={body.pump_status}, "
         f"battery={body.battery_level}% ({body.battery_voltage}V), "
-        f"solar={body.solar_charging}, source={body.power_source}"
+        f"solar={body.solar_charging}, source={body.power_source} | "
+        f"ESP32 says cmd='{body.current_command}' mode='{body.current_mode}'"
     )
 
     # ---- Append to rolling history log ----
@@ -166,7 +171,7 @@ def update_status(body: StatusUpdate):
         "tilt_y": body.tilt_y,
         "gyro_z": body.gyro_z,
         "oil_detected": body.oil_detected,
-        "pump_status": body.pump_status,
+        "pump_status": app_state["pump_status"],
         "battery_level": body.battery_level,
         "battery_voltage": body.battery_voltage,
         "solar_charging": body.solar_charging,

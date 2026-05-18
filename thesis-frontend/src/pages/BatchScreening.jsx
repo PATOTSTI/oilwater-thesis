@@ -127,8 +127,8 @@ export default function BatchScreening() {
       setFileError('No valid images found. Only JPG and PNG files are supported.')
       return
     }
-    if (valid.length > 50) {
-      setFileError(`Maximum 50 images per batch. You selected ${valid.length}.`)
+    if (valid.length > 100) {
+      setFileError(`Maximum 100 images per batch. You selected ${valid.length}.`)
       return
     }
 
@@ -239,7 +239,7 @@ export default function BatchScreening() {
                   Drag and drop your drone images here, or click to browse
                 </p>
                 <p className="text-xs text-gray-500 text-center">
-                  JPG &amp; PNG &nbsp;•&nbsp; Up to 50 images per batch
+                  JPG &amp; PNG &nbsp;•&nbsp; Up to 100 images per batch
                 </p>
               </div>
 

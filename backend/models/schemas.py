@@ -195,15 +195,14 @@ class CommandRequest(BaseModel):
 class CommandResponse(BaseModel):
     """Response for GET /command and POST /command — ESP32 reads this on every poll.
 
-    UPDATED: Added speed and angle so the ESP32 knows the full hardware parameters
-             to apply, not just the command string.
+    Includes speed, angle, pump, and armed so the ESP32 firmware has everything it
+    needs to execute the command and manage the arm/pump hardware state.
     """
     command: str = Field(
         ...,
         description="Current movement command for the ESP32 to execute.",
         examples=["forward"],
     )
-    # UPDATED: Echoes the stored PWM speed so ESP32 can apply it to the BTS7960 drivers
     speed: Optional[int] = Field(
         default=None,
         description=(
@@ -212,7 +211,6 @@ class CommandResponse(BaseModel):
         ),
         examples=[200],
     )
-    # UPDATED: Echoes the stored rudder angle so ESP32 can position the servos
     angle: Optional[int] = Field(
         default=None,
         description=(
@@ -220,6 +218,32 @@ class CommandResponse(BaseModel):
             "Present for set_rudder commands; null for all other commands."
         ),
         examples=[0],
+    )
+    pump: Optional[bool] = Field(
+        default=None,
+        description=(
+            "Current pump state the ESP32 should apply. "
+            "True = relay ON, False = relay OFF. "
+            "Always present in GET /command responses."
+        ),
+        examples=[False],
+    )
+    armed: Optional[bool] = Field(
+        default=None,
+        description=(
+            "Whether the motors are armed. ESP32 blocks all movement when False. "
+            "Set by POST /arm from the frontend. Always present in GET /command responses."
+        ),
+        examples=[False],
+    )
+
+
+class ArmRequest(BaseModel):
+    """Body for POST /arm — frontend arms or disarms the motor drivers."""
+    armed: bool = Field(
+        ...,
+        description="True to arm motors (enable movement commands); False to disarm and stop.",
+        examples=[True],
     )
 
 

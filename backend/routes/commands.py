@@ -17,6 +17,7 @@
 # ---------------------------------------------------------------------------
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
 from core.state import app_state
 from core.response import make_response
@@ -29,6 +30,7 @@ from core.utils import (
 )
 from core.logger import log_event
 from models.schemas import (
+    ArmRequest,
     CommandRequest,
     CommandResponse,
     ModeRequest,
@@ -47,6 +49,21 @@ PRIORITY_COMMANDS = {"emergency_stop", "return_home"}
 
 # Pump commands need extra handling to keep pump_status in sync with state.
 PUMP_COMMANDS = {"pump_on", "pump_off"}
+
+
+def _make_cmd_response(command: str, speed=None, angle=None) -> dict:
+    """Build a CommandResponse dict with pump and armed always populated.
+
+    Every GET /command return must go through this helper so the ESP32 firmware
+    always receives the 'pump' and 'armed' fields it needs.
+    """
+    return CommandResponse(
+        command=command,
+        speed=speed,
+        angle=angle,
+        pump=app_state["pump_status"],
+        armed=app_state["motors_armed"],
+    ).model_dump()
 
 
 # ---------------------------------------------------------------------------
@@ -87,8 +104,7 @@ def get_command():
     if app_state["current_command"] == "emergency_stop":
         print("[GET /command] Emergency stop active — returning 'emergency_stop'.")
         return make_response(
-            # UPDATED: no speed/angle for emergency_stop (motors cut immediately)
-            data=CommandResponse(command="emergency_stop").model_dump(),
+            data=_make_cmd_response("emergency_stop"),
             message="Emergency stop is active. All motors and pump halted.",
         )
 
@@ -110,7 +126,7 @@ def get_command():
             )
             print("[GET /command] Cleaning complete — switching to 'standby'.")
             return make_response(
-                data=CommandResponse(command="stop").model_dump(),
+                data=_make_cmd_response("stop"),
                 message="Cleaning complete. Device returned to standby.",
             )
 
@@ -157,7 +173,7 @@ def get_command():
                 )
                 print("[GET /command] Cleaning complete — switching to 'standby'.")
                 return make_response(
-                    data=CommandResponse(command="stop").model_dump(),
+                    data=_make_cmd_response("stop"),
                     message="Cleaning complete. Device returned to standby.",
                 )
 
@@ -190,12 +206,11 @@ def get_command():
         # UPDATED: store the proportional rudder angle in state
         app_state["current_rudder_angle"] = nav_result["rudder_angle"]
         return make_response(
-            data=CommandResponse(
-                command=nav_cmd,
+            data=_make_cmd_response(
+                nav_cmd,
                 speed=effective_speed if nav_cmd != "stop" else None,
-                # UPDATED: include proportional rudder angle in the response
                 angle=nav_result["rudder_angle"] if nav_cmd != "stop" else None,
-            ).model_dump(),
+            ),
             message=(
                 f"Cleaning waypoint command: '{nav_cmd}' | "
                 f"rudder={nav_result['rudder_angle']}° | speed={effective_speed} PWM."
@@ -241,13 +256,12 @@ def get_command():
             f"hdg_err={nav_result['heading_error']}° | "
             f"speed={nav_result['speed']} PWM"
         )
-        # UPDATED: return proportional rudder angle alongside the forward command
         return make_response(
-            data=CommandResponse(
-                command=nav_cmd,
+            data=_make_cmd_response(
+                nav_cmd,
                 speed=nav_result["speed"] if nav_cmd != "stop" else None,
                 angle=nav_result["rudder_angle"] if nav_cmd != "stop" else None,
-            ).model_dump(),
+            ),
             message=(
                 f"Auto-navigation: '{nav_cmd}' | "
                 f"rudder={nav_result['rudder_angle']}° | "
@@ -262,24 +276,107 @@ def get_command():
         app_state["current_command"] = "return_home"
         print("[GET /command] Returning mode active — enforcing 'return_home'.")
         return make_response(
-            data=CommandResponse(command="return_home").model_dump(),
+            data=_make_cmd_response("return_home"),
             message="Returning to home. Command: 'return_home'.",
         )
 
     # ---- Default: return whatever command is currently stored ----
     cmd = app_state["current_command"]
-    print(f"[GET /command] ESP32 polled — returning: '{cmd}'")
-    # UPDATED: echo speed and angle from state so ESP32 always has full hardware parameters.
-    # speed is included for movement commands; angle is included when cmd is set_rudder.
     _is_movement = cmd not in {"stop", "pump_on", "pump_off", "emergency_stop",
                                 "return_home", "set_rudder"}
+    print(f"[GET /command] ESP32 polled — returning: '{cmd}' armed={app_state['motors_armed']} pump={app_state['pump_status']}")
     return make_response(
-        data=CommandResponse(
-            command=cmd,
+        data=_make_cmd_response(
+            cmd,
             speed=app_state["current_speed"] if _is_movement else None,
             angle=app_state["current_rudder_angle"] if cmd == "set_rudder" else None,
-        ).model_dump(),
+        ),
         message=f"Current command: '{cmd}'.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /command/raw
+# ---------------------------------------------------------------------------
+@router.get(
+    "/command/raw",
+    summary="ESP32 flat polling endpoint — all fields at root level, no wrapper",
+)
+def get_command_raw():
+    """Flat command endpoint designed for the ESP32 firmware.
+
+    Fixes two firmware assumptions:
+      1. "armed" field — firmware reads doc["armed"] to set motorsArmed;
+         we always return true so motor commands are not blocked.
+      2. "pump" field  — firmware reads doc["pump"] as a boolean;
+         we return app_state pump_status so the relay activates correctly.
+      3. "pump_on"/"pump_off" are mapped to "stop" so the firmware's
+         executeCommand() never hits the "Unknown command" branch.
+
+    Response: {"command":"forward","speed":200,"angle":0,"pump":false,"armed":true}
+    """
+    raw_cmd = app_state["current_command"]
+
+    # Emergency stop overrides everything
+    if raw_cmd == "emergency_stop":
+        print("[GET /command/raw] Emergency stop active.")
+        return JSONResponse({
+            "command": "emergency_stop",
+            "speed": 0,
+            "angle": 0,
+            "pump": False,
+            "armed": True,
+        })
+
+    # Map pump commands to "stop" — pump state is carried by the "pump" boolean
+    # so the firmware's executeCommand() never sees "pump_on"/"pump_off"
+    cmd = "stop" if raw_cmd in {"pump_on", "pump_off"} else raw_cmd
+    _is_movement = cmd not in {"stop", "emergency_stop", "return_home", "set_rudder"}
+
+    print(f"[GET /command/raw] cmd='{cmd}' pump={app_state['pump_status']} armed={app_state['motors_armed']}")
+    return JSONResponse({
+        "command": cmd,
+        "speed": app_state["current_speed"] if _is_movement else 0,
+        "angle": app_state["current_rudder_angle"] if cmd == "set_rudder" else 0,
+        "pump":  app_state["pump_status"],
+        "armed": app_state["motors_armed"],
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /arm
+# ---------------------------------------------------------------------------
+@router.post(
+    "/arm",
+    response_model=StandardResponse,
+    summary="Frontend arms or disarms the motor drivers",
+)
+def set_arm(body: ArmRequest):
+    """Arm or disarm the motor drivers.
+
+    The ESP32 firmware reads the 'armed' field from GET /command on every poll.
+    When armed=False the firmware blocks all movement commands and stops motors.
+
+    **Called by:** Frontend dashboard ARM/DISARM button.
+    """
+    previous = app_state["motors_armed"]
+    app_state["motors_armed"] = body.armed
+
+    if not body.armed:
+        # Force stop when disarming so motors don't keep running
+        app_state["current_command"] = "stop"
+        print("[POST /arm] Motors DISARMED — command reset to 'stop'.")
+    else:
+        print("[POST /arm] Motors ARMED — ready for operation.")
+
+    log_event(
+        "command",
+        f"Motors {'armed' if body.armed else 'disarmed'}.",
+        {"armed": body.armed, "previous": previous},
+    )
+    return make_response(
+        data={"armed": body.armed},
+        message=f"Motors {'armed' if body.armed else 'disarmed'}.",
     )
 
 
