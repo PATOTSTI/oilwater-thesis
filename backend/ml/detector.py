@@ -46,7 +46,7 @@ def load_model(model_path: str = "ml/best.pt") -> YOLO:
 def run_inference(
     model: YOLO,
     image: Image.Image,
-    confidence_threshold: float = 0.355,
+    confidence_threshold: float = 0.479,
 ) -> list[dict]:
     """
     Run YOLOv8 inference on a PIL image and return structured detections.

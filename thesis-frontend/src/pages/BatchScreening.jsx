@@ -25,6 +25,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { screenBatch } from '../api/endpoints'
+import { useScreening } from '../context/ScreeningContext'
 
 // ── Shared card / title style — matches Detection.jsx ─────────────────────────
 const cardClass =
@@ -82,27 +83,29 @@ function tabCount(key, result) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BatchScreening() {
-  // ── File state ──────────────────────────────────────────────────────────────
-  const [files, setFiles]             = useState([])           // File[] chosen by user
-  const [previewUrls, setPreviewUrls] = useState({})           // filename → blob URL
-  const [isDragging, setIsDragging]   = useState(false)
-  const [fileError, setFileError]     = useState(null)
+  // ── Persistent screening state (survives page navigation) ─────────────────────
+  const {
+    files,
+    previewUrls,
+    fileError,
+    screeningResult,
+    setScreeningResult,
+    screeningError,
+    setScreeningError,
+    applyFiles,
+    reset,
+  } = useScreening()
 
-  // ── Screening state ──────────────────────────────────────────────────────────
-  const [isScreening, setIsScreening]         = useState(false)
-  const [uploadProgress, setUploadProgress]   = useState(0)    // 0-100 during upload
-  const [screeningResult, setScreeningResult] = useState(null)
-  const [screeningError, setScreeningError]   = useState(null)
-
-  // ── UI state ─────────────────────────────────────────────────────────────────
-  const [activeFilter, setActiveFilter] = useState('all')
+  // ── Transient UI state (local — resets on every visit, which is correct) ───────
+  const [isDragging, setIsDragging]         = useState(false)
+  const [isScreening, setIsScreening]       = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [activeFilter, setActiveFilter]     = useState('all')
 
   const fileInputRef = useRef(null)
   const navigate = useNavigate()
 
   // ── Open a screened image in the detailed Detection page ──────────────────────
-  // Passes the File object + screening metadata through React Router location.state
-  // so Detection.jsx can pre-load the image and show the screening context banner.
   const handleOpenInDetection = useCallback((item) => {
     const file = files.find((f) => f.name === item.filename)
     if (!file) return
@@ -116,49 +119,11 @@ export default function BatchScreening() {
     })
   }, [files, navigate])
 
-  // ── File selection ────────────────────────────────────────────────────────────
-  const applyFiles = useCallback((rawList) => {
-    const valid = [...rawList].filter((f) =>
-      ['image/jpeg', 'image/jpg', 'image/png'].includes(f.type)
-    )
-    const skipped = rawList.length - valid.length
-
-    if (valid.length === 0) {
-      setFileError('No valid images found. Only JPG and PNG files are supported.')
-      return
-    }
-    if (valid.length > 100) {
-      setFileError(`Maximum 100 images per batch. You selected ${valid.length}.`)
-      return
-    }
-
-    // Build blob-URL preview map keyed by filename
-    const urls = {}
-    valid.forEach((f) => { urls[f.name] = URL.createObjectURL(f) })
-
-    setPreviewUrls((prev) => {
-      Object.values(prev).forEach(URL.revokeObjectURL)
-      return urls
-    })
-
-    setFiles(valid)
-    setFileError(skipped > 0 ? `${skipped} non-image file(s) were ignored.` : null)
-    setScreeningResult(null)
-    setScreeningError(null)
-    setActiveFilter('all')
-  }, [])
-
   const handleReset = useCallback(() => {
-    Object.values(previewUrls).forEach(URL.revokeObjectURL)
-    setFiles([])
-    setPreviewUrls({})
-    setFileError(null)
-    setScreeningResult(null)
-    setScreeningError(null)
+    reset(fileInputRef)
     setUploadProgress(0)
     setActiveFilter('all')
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }, [previewUrls])
+  }, [reset])
 
   // ── Run screening ─────────────────────────────────────────────────────────────
   const handleScreen = async () => {
@@ -230,7 +195,10 @@ export default function BatchScreening() {
                 onDrop={(e) => {
                   e.preventDefault()
                   setIsDragging(false)
-                  if (e.dataTransfer.files.length) applyFiles(e.dataTransfer.files)
+                  if (e.dataTransfer.files.length) {
+                    applyFiles(e.dataTransfer.files)
+                    setActiveFilter('all')
+                  }
                 }}
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -299,7 +267,12 @@ export default function BatchScreening() {
             accept="image/jpeg,image/png"
             multiple
             className="hidden"
-            onChange={(e) => { if (e.target.files?.length) applyFiles(e.target.files) }}
+            onChange={(e) => {
+              if (e.target.files?.length) {
+                applyFiles(e.target.files)
+                setActiveFilter('all')
+              }
+            }}
           />
         </div>
 

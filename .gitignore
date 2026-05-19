@@ -1,5 +1,6 @@
 # Project-specific
 /.claude
+firmware/
 
 # Environment files / secrets
 .env
